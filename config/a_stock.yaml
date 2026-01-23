@@ -1,0 +1,129 @@
+# A股量化交易系统配置
+
+# ===== 数据源配置 =====
+data_sources:
+  # Tushare（推荐）
+  tushare:
+    enabled: true
+    token: ""  # 填入你的Tushare Token
+    pro_api: "https://api.tushare.pro"
+
+  # AkShare（免费）
+  akshare:
+    enabled: true
+
+  # 东方财富
+  eastmoney:
+    enabled: true
+
+# ===== 交易所配置 =====
+exchanges:
+  sse:  # 上交所
+    code: "SSE"
+    price_limit: 0.10  # ±10%
+    board_names: ["主板"]
+
+  szse:  # 深交所
+    code: "SZSE"
+    price_limit: 0.10
+    board_names: ["主板", "创业板", "科技"]
+
+  bse:   # 北交所
+    code: "BSE"
+    price_limit: 0.30  # ±30%
+
+# ===== 板股规则配置 =====
+trading_rules:
+  t_plus_one: true           # T+1制度
+  min_lot_size: 100          # 最小手数（1手=100股）
+  trading_days: ["MON", "TUE", "WED", "THU", "FRI"]
+  trading_hours:
+    morning: ["09:30", "11:30"]
+    afternoon: ["13:00", "15:00"]
+
+# ===== 交易成本配置 =====
+costs:
+  commission:
+    rate: 0.00025            # 万2.5佣金
+    min_fee: 5.0             # 最低5元
+  stamp_duty:
+    rate: 0.001              # 0.1%印花税（仅卖出）
+  transfer_fee:
+    rate: 0.00001            # 万1过户费
+
+# ===== 涨跌停配置 =====
+price_limits:
+  main_board: 0.10           # 主板±10%
+  gem_board: 0.20            # 创业板±20%
+  star_board: 0.20           # 科创板±20%
+  north_board: 0.30         # 北交所±30%
+  st_board: 0.05             # ST股±5%
+
+# ===== 策略配置 =====
+strategies:
+  # 股票池
+  universe:
+    type: "index"
+    value: "000300.SH"       # 沪深300
+
+  # 因子配置
+  factors:
+    value:
+      pe_ratio: true
+      pb_ratio: true
+      ps_ratio: true
+    growth:
+      revenue_growth: true
+      profit_growth: true
+    momentum:
+      returns_20d: true
+      returns_60d: true
+
+# ===== 风险管理配置 =====
+risk_management:
+  # 仓位管理
+  position:
+    max_single_stock: 0.10    # 单票最大仓位10%
+    max_sector: 0.30         # 单行业最大30%
+    min_cash: 0.05           # 最小现金比例5%
+
+  # 风险控制
+  controls:
+    max_drawdown: 0.20       # 最大回撤20%
+    stop_loss: 0.08          # 止损8%
+    take_profit: 0.15        # 止盈15%
+
+  # 流动性过滤
+  liquidity:
+    min_avg_volume: 5000000   # 最小日均成交额500万
+    min_turnover: 0.02       # 最小换手率2%
+
+# ===== 回测配置 =====
+backtesting:
+  start_date: "2019-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000000   # 100万初始资金
+  rebalance_frequency: "monthly"  # 调仓频率
+  slippage: 0.001            # 滑点0.1%
+
+# ===== 实盘交易配置 =====
+live_trading:
+  mode: "simulated"          # simulated 或 real
+  broker: ""                 # 券商代码
+  account: ""
+  password: ""
+  trade_time:
+    order_time: "09:25"      # 集合竞价下单
+    close_time: "14:50"      # 收盘前检查
+
+# ===== 对冲配置 =====
+hedging:
+  enabled: false
+  instruments: ["IF", "IC", "IH"]  # 中证500、中证1000、上证50股指期货
+  hedge_ratio: 0.8          # 对冲比例80%
+
+# ===== 日志配置 =====
+logging:
+  level: "INFO"
+  file: "logs/quant.log"
+  rotation: "daily"
