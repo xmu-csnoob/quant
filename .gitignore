@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据文件（大量数据不提交）
+data/raw/*
+data/processed/*
+data/indices/*
+!data/.gitkeep
+
+# 敏感配置
+config/secrets.yaml
+config/a_stock_local.yaml
+
+# 日志
+logs/*
+!logs/.gitkeep
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# 回测结果
+backtesting/results/
+analysis/output/
