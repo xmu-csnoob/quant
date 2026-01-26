@@ -1,6 +1,11 @@
+# Python 虚拟环境
+# 创建: python3 -m venv .venv
+# 激活: source .venv/bin/activate
+# 安装: pip install -r requirements.txt
+
 # 核心依赖
-pandas>=2.0.0
 numpy>=1.24.0
+pandas>=2.0.0
 
 # 数据获取
 tushare>=1.2.90
