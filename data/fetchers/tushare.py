@@ -2,6 +2,11 @@
 Tushare 数据获取器
 
 从 Tushare Pro API 获取真实的 A 股市场数据
+
+注意：免费账户有频率限制
+- 股票列表：每小时最多 1 次
+- 分钟数据：每天最多 2 次
+- 涨跌停数据：每小时最多 1 次
 """
 
 import os
@@ -20,8 +25,10 @@ from data.fetchers.base import (
     BaseDataFetcher,
     Exchange,
     TokenNotFoundError,
-    DataFetchError
+    DataFetchError,
+    RateLimitError
 )
+from data.cache.persistent_cache import PersistentCache
 
 
 class TushareDataFetcher(BaseDataFetcher):
@@ -33,6 +40,7 @@ class TushareDataFetcher(BaseDataFetcher):
     2. 稳定可靠
     3. 支持全市场数据
     4. 需要申请 Token（有免费额度）
+    5. 持久化缓存支持（应对频率限制）
 
     用途：
     - 生产环境数据获取
@@ -50,7 +58,14 @@ class TushareDataFetcher(BaseDataFetcher):
         Exchange.BSE: "BSE",
     }
 
-    def __init__(self, token: str = None, max_retries: int = 3):
+    # 缓存 TTL 配置（针对免费账户频率限制）
+    CACHE_TTL = {
+        "stock_list": 3600,      # 1小时（每小时限制1次）
+        "minute_data": 86400,    # 24小时（每天限制2次）
+        "limit_list": 3600,      # 1小时（每小时限制1次）
+    }
+
+    def __init__(self, token: str = None, max_retries: int = 3, cache_dir: str = "data/cache/tushare"):
         """
         初始化 Tushare 数据获取器
 
@@ -80,14 +95,44 @@ class TushareDataFetcher(BaseDataFetcher):
             self.token = token
             self.max_retries = max_retries
 
-            logger.info("TushareDataFetcher initialized successfully")
+            # 初始化持久化缓存
+            self.cache = PersistentCache(cache_dir=cache_dir)
+
+            logger.info("TushareDataFetcher initialized successfully with cache")
 
         except Exception as e:
             raise DataFetchError(f"Failed to initialize Tushare API: {e}")
 
+    def _detect_rate_limit(self, error_message: str) -> tuple:
+        """
+        检测错误是否为频率限制
+
+        Args:
+            error_message: 错误消息
+
+        Returns:
+            (是否为频率限制, 限制类型)
+        """
+        # 检测每小时限制
+        if "每小时最多访问" in error_message or "每小時最多訪問" in error_message:
+            return True, "hourly"
+
+        # 检测每天限制
+        if "每天最多访问" in error_message or "每天最多訪問" in error_message:
+            return True, "daily"
+
+        # 检测其他可能的限制关键词
+        msg_lower = error_message.lower()
+        if "rate limit" in msg_lower or "too many" in msg_lower:
+            return True, "unknown"
+
+        return False, None
+
     def get_stock_list(self, exchange: Exchange) -> pd.DataFrame:
         """
         获取股票列表
+
+        使用持久化缓存避免频率限制（每小时最多 1 次）
 
         Args:
             exchange: 交易所枚举
@@ -97,7 +142,17 @@ class TushareDataFetcher(BaseDataFetcher):
 
         Raises:
             DataFetchError: 数据获取失败
+            RateLimitError: 频率限制（但会先尝试返回缓存）
         """
+        # 生成缓存键
+        cache_key = f"stock_list_{exchange.value}"
+
+        # 先尝试从缓存获取
+        cached_df = self.cache.get(cache_key)
+        if cached_df is not None:
+            logger.info(f"Retrieved {len(cached_df)} stocks from cache ({exchange.value})")
+            return cached_df
+
         try:
             exchange_code = self.EXCHANGE_MAP[exchange]
 
@@ -113,10 +168,42 @@ class TushareDataFetcher(BaseDataFetcher):
                 logger.warning(f"No stocks found for exchange: {exchange.value}")
             else:
                 logger.info(f"Retrieved {len(df)} stocks from {exchange.value}")
+                # 保存到缓存
+                self.cache.put(cache_key, df, ttl=self.CACHE_TTL["stock_list"])
 
             return df
 
         except Exception as e:
+            error_msg = str(e)
+
+            # 检测是否为频率限制
+            is_rate_limit, limit_type = self._detect_rate_limit(error_msg)
+
+            if is_rate_limit:
+                logger.warning(f"Rate limit hit for stock list: {limit_type}")
+                # 尝试返回过期的缓存（如果有）
+                # 先删除当前元数据，尝试直接读取文件
+                cache_file = self.cache._get_cache_file(cache_key)
+                if cache_file.exists():
+                    try:
+                        import json
+                        with open(cache_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        if "_data" in data and "_columns" in data:
+                            df = pd.DataFrame(data["_data"], columns=data["_columns"])
+                            logger.warning(f"Using stale cache due to rate limit ({len(df)} rows)")
+                            # 重新设置缓存
+                            self.cache.put(cache_key, df, ttl=self.CACHE_TTL["stock_list"])
+                            return df
+                    except Exception:
+                        pass
+
+                # 抛出频率限制异常
+                raise RateLimitError(
+                    f"Stock list API rate limit exceeded: {error_msg}",
+                    limit_type=limit_type
+                )
+
             logger.error(f"Failed to fetch stock list from {exchange.value}: {e}")
             raise DataFetchError(f"Stock list fetch failed: {e}")
 
