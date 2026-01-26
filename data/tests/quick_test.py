@@ -3,7 +3,8 @@
 """
 
 import sys
-sys.path.insert(0, "/home/wangwenfei/quant")
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from data.fetchers.mock import MockDataFetcher
 from data.fetchers.base import Exchange
