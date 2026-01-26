@@ -162,17 +162,27 @@ fetcher = MockDataFetcher(scenario="volatile")  # 高波动
 
 ## Configuration
 
+### Environment Setup (虚拟环境)
+
+```bash
+# 创建虚拟环境
+python3 -m venv .venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 退出虚拟环境
+deactivate
+```
+
 ### Environment Variables
 
 ```bash
 # Tushare Token (optional, for real data)
 export TUSHARE_TOKEN=your_token_here
-```
-
-### Dependencies
-
-```bash
-pip install pandas loguru tenacity tushare
 ```
 
 ## A-Share Trading Rules
