@@ -47,6 +47,19 @@ class DataValidationError(DataFetcherError):
     pass
 
 
+class RateLimitError(DataFetcherError):
+    """API 频率限制异常"""
+
+    def __init__(self, message: str, limit_type: str = None):
+        """
+        Args:
+            message: 错误消息
+            limit_type: 限制类型 (hourly/daily)
+        """
+        super().__init__(message)
+        self.limit_type = limit_type
+
+
 class BaseDataFetcher(ABC):
     """
     数据获取器抽象基类
