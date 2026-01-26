@@ -185,6 +185,11 @@ deactivate
 export TUSHARE_TOKEN=your_token_here
 ```
 
+## Git Configuration
+
+- **Default branch**: `main` (not `master`)
+- When creating branches or PRs, base them on `main`
+
 ## A-Share Trading Rules
 
 - **T+1 system**: Stocks bought today can only be sold tomorrow
