@@ -65,7 +65,13 @@ class TushareDataFetcher(BaseDataFetcher):
         "limit_list": 3600,      # 1小时（每小时限制1次）
     }
 
-    def __init__(self, token: str = None, max_retries: int = 3, cache_dir: str = "data/cache/tushare"):
+    def __init__(
+        self,
+        token: str = None,
+        max_retries: int = 3,
+        cache_dir: str = "data/cache/tushare",
+        proxy_url: str = None
+    ):
         """
         初始化 Tushare 数据获取器
 
@@ -73,6 +79,8 @@ class TushareDataFetcher(BaseDataFetcher):
             token: Tushare API Token
                    如果为 None，则从环境变量 TUSHARE_TOKEN 读取
             max_retries: 最大重试次数
+            cache_dir: 缓存目录
+            proxy_url: 代理URL（可选，用于破解版API）
 
         Raises:
             TokenNotFoundError: Token 为空或未设置环境变量
@@ -80,6 +88,9 @@ class TushareDataFetcher(BaseDataFetcher):
         # 获取 Token
         if token is None:
             token = os.getenv("TUSHARE_TOKEN")
+            # 尝试从环境变量获取代理
+            if proxy_url is None:
+                proxy_url = os.getenv("TUSHARE_PROXY_URL")
 
         if not token:
             raise TokenNotFoundError(
@@ -94,6 +105,12 @@ class TushareDataFetcher(BaseDataFetcher):
             self.pro = ts.pro_api()
             self.token = token
             self.max_retries = max_retries
+
+            # 如果提供了代理URL，使用代理（破解版API）
+            if proxy_url:
+                self.pro._DataApi__token = token
+                self.pro._DataApi__http_url = proxy_url
+                logger.info(f"Using Tushare proxy: {proxy_url}")
 
             # 初始化持久化缓存
             self.cache = PersistentCache(cache_dir=cache_dir)

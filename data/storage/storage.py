@@ -188,6 +188,10 @@ class DataStorage:
 
             df = pd.read_csv(file_path, encoding=self.encoding)
 
+            # 标准化列名（兼容 Tushare 格式）
+            if "vol" in df.columns and "volume" not in df.columns:
+                df = df.rename(columns={"vol": "volume"})
+
             # 确保日期格式正确
             if "trade_date" in df.columns:
                 df["trade_date"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
