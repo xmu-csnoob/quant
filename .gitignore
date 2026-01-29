@@ -26,6 +26,23 @@ data/processed/*
 data/indices/*
 !data/.gitkeep
 
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+data/quant.db
+
+# 训练好的模型文件
+models/*.json
+models/*.pkl
+models/*.h5
+models/*.joblib
+
+# 回测结果和缓存
+backtest_results/*.csv
+data/cache/*
+!data/cache/.gitkeep
+
 # 敏感配置
 config/secrets.yaml
 config/a_stock_local.yaml
