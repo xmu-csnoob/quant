@@ -71,6 +71,7 @@ class Signal:
         price: 信号价格
         reason: 信号原因（可选，用于调试）
         confidence: 信号置信度 (0-1)，可选
+        quantity: 建议的交易数量（可选），如果不指定则由回测器计算
     """
 
     date: str
@@ -78,6 +79,7 @@ class Signal:
     price: float
     reason: Optional[str] = None
     confidence: Optional[float] = None
+    quantity: Optional[int] = None
 
     def __str__(self) -> str:
         conf_str = f", confidence={self.confidence:.2f}" if self.confidence else ""

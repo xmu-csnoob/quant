@@ -297,10 +297,10 @@ class TechnicalFeatureExtractor(BaseFeatureExtractor):
         df["K"] = 50.0
         df["D"] = 50.0
 
-        # 计算K、D（平滑处理）
+        # 计算K、D（平滑处理）- 使用iloc避免索引问题
         for i in range(1, len(df)):
-            df.loc[i, "K"] = (2 / 3) * df.loc[i - 1, "K"] + (1 / 3) * df.loc[i, "RSV"]
-            df.loc[i, "D"] = (2 / 3) * df.loc[i - 1, "D"] + (1 / 3) * df.loc[i, "K"]
+            df.iloc[i, df.columns.get_loc("K")] = (2 / 3) * df.iloc[i - 1]["K"] + (1 / 3) * df.iloc[i]["RSV"]
+            df.iloc[i, df.columns.get_loc("D")] = (2 / 3) * df.iloc[i - 1]["D"] + (1 / 3) * df.iloc[i]["K"]
 
         # 计算J
         df["J"] = 3 * df["K"] - 2 * df["D"]

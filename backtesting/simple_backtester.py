@@ -165,8 +165,12 @@ class SimpleBacktester:
         for signal in signals:
             if signal.signal_type == SignalType.BUY:
                 if position is None:
-                    # 买入
-                    quantity = int(capital / signal.price / 100) * 100  # 整手
+                    # 买入：优先使用Signal指定的quantity，否则根据资金计算
+                    if signal.quantity is not None:
+                        quantity = signal.quantity
+                    else:
+                        quantity = int(capital / signal.price / 100) * 100  # 整手
+
                     if quantity > 0:
                         position = Position(
                             entry_date=signal.date,
@@ -205,6 +209,38 @@ class SimpleBacktester:
                     drawdown = (max_capital - current_capital) / max_capital
                     if drawdown > max_drawdown:
                         max_drawdown = drawdown
+
+        # 处理最后未平仓的情况
+        if position is not None:
+            # 用最后一天的价格平仓
+            last_price = df.iloc[-1]["close"]
+            last_date = df.iloc[-1]["trade_date"]
+
+            pnl = (last_price - position.entry_price) * position.quantity
+            pnl_ratio = (last_price - position.entry_price) / position.entry_price
+
+            capital += position.quantity * last_price
+
+            trade = Trade(
+                entry_date=position.entry_date,
+                exit_date=last_date,
+                entry_price=position.entry_price,
+                exit_price=last_price,
+                quantity=position.quantity,
+                trade_type=position.position_type,
+                pnl=pnl,
+                pnl_ratio=pnl_ratio,
+                reason_exit="期末平仓",
+            )
+            trades.append(trade)
+
+            # 更新最大回撤
+            current_capital = capital
+            if current_capital > max_capital:
+                max_capital = current_capital
+            drawdown = (max_capital - current_capital) / max_capital
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
 
         # 计算统计指标
         total_return = (capital - self.initial_capital) / self.initial_capital
