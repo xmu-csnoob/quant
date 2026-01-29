@@ -73,73 +73,94 @@ class MLFeatureExtractor:
         return df
 
     def _add_momentum_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """价格动量特征"""
+        """价格动量特征（使用昨日收盘价避免前视偏差）"""
+        # 使用昨日收盘价计算收益率（盘中只能获取昨天的数据）
+        close_yesterday = df["close"].shift(1)
+
         # 各种周期的收益率
         for period in [1, 3, 5, 10]:
-            df[f"f_return_{period}d"] = df["close"].pct_change(period)
+            df[f"f_return_{period}d"] = close_yesterday.pct_change(period)
 
         # 动量强弱
         df["f_momentum_5_20"] = (
-            df["close"].pct_change(5) - df["close"].pct_change(20)
+            close_yesterday.pct_change(5) - close_yesterday.pct_change(20)
         )
 
         return df
 
     def _add_indicator_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """技术指标特征"""
-        # RSI (14日)
-        df["f_rsi"] = self._calculate_rsi(df["close"], 14)
+        """技术指标特征（使用昨日收盘价避免前视偏差）"""
+        close_yesterday = df["close"].shift(1)
 
-        # MACD
-        macd_line = df["close"].ewm(span=12).mean() - df["close"].ewm(span=26).mean()
+        # RSI (14日) - 基于昨日收盘价
+        df["f_rsi"] = self._calculate_rsi(close_yesterday, 14)
+
+        # MACD - 基于昨日收盘价
+        macd_line = close_yesterday.ewm(span=12).mean() - close_yesterday.ewm(span=26).mean()
         signal_line = macd_line.ewm(span=9).mean()
         df["f_macd"] = macd_line - signal_line
         df["f_macd_hist"] = macd_line - signal_line
 
-        # 布林带位置（价格在布林带中的位置）
-        bb_mid = df["close"].rolling(20).mean()
-        bb_std = df["close"].rolling(20).std()
+        # 布林带位置（昨日价格在布林带中的位置）
+        bb_mid = close_yesterday.rolling(20).mean()
+        bb_std = close_yesterday.rolling(20).std()
         bb_upper = bb_mid + 2 * bb_std
         bb_lower = bb_mid - 2 * bb_std
-        df["f_bb_position"] = (df["close"] - bb_lower) / (bb_upper - bb_lower)
+        # 修复除零风险
+        bb_width = bb_upper - bb_lower
+        df["f_bb_position"] = np.divide(
+            close_yesterday - bb_lower, bb_width,
+            where=bb_width != 0,
+            out=np.full_like(close_yesterday, 0.5, dtype=float)
+        )
 
-        # ATR (14日)
+        # ATR (14日) - 基于当日数据（价格波动需要当日数据）
         high_low = df["high"] - df["low"]
         high_close = np.abs(df["high"] - df["close"].shift())
         low_close = np.abs(df["low"] - df["close"].shift())
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         df["f_atr"] = tr.rolling(14).mean()
-        df["f_atr_ratio"] = df["f_atr"] / df["close"]
+        # ATR比率使用昨日收盘价
+        df["f_atr_ratio"] = np.divide(
+            df["f_atr"], close_yesterday,
+            where=close_yesterday != 0,
+            out=np.zeros_like(close_yesterday, dtype=float)
+        )
 
         return df
 
     def _add_ma_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """均线系统特征"""
-        # 价格相对均线的位置 - 使用昨日价格避免前视偏差
+        """均线系统特征（使用昨日收盘价避免前视偏差）"""
         close_yesterday = df["close"].shift(1)
+
+        # 价格相对均线的位置 - 使用昨日价格
         for period in [5, 10, 20, 60]:
             ma = close_yesterday.rolling(period).mean()
             df[f"f_ma_{period}_ratio"] = close_yesterday / ma - 1
 
-        # 均线斜率
-        ma20 = df["close"].rolling(20).mean()
+        # 均线斜率 - 使用昨日收盘价的MA
+        ma20 = close_yesterday.rolling(20).mean()
         df["f_ma20_slope"] = ma20.pct_change(5)
 
-        # 多头排列（短期>长期）
-        ma5 = df["close"].rolling(5).mean()
-        ma20 = df["close"].rolling(20).mean()
-        ma60 = df["close"].rolling(60).mean()
+        # 多头排列（短期>长期）- 基于昨日收盘价
+        ma5 = close_yesterday.rolling(5).mean()
+        ma20 = close_yesterday.rolling(20).mean()
+        ma60 = close_yesterday.rolling(60).mean()
         df["f_ma_alignment"] = ((ma5 > ma20) & (ma20 > ma60)).astype(int)
 
         return df
 
     def _add_volume_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """成交量特征"""
+        """成交量特征（修复除零风险）"""
         # 量比（当日成交量 / 5日均量）
         vol_ma5 = df["volume"].rolling(5).mean()
-        df["f_volume_ratio"] = df["volume"] / vol_ma5
+        df["f_volume_ratio"] = np.divide(
+            df["volume"], vol_ma5,
+            where=vol_ma5 != 0,
+            out=np.ones_like(df["volume"], dtype=float)
+        )
 
-        # 量价背离
+        # 量价背离 - 使用昨日收盘价
         price_change = df["close"].pct_change()
         volume_change = df["volume"].pct_change()
         df["f_price_volume_trend"] = price_change * volume_change
@@ -147,8 +168,13 @@ class MLFeatureExtractor:
         # OBV (能量潮)
         obv = (np.sign(df["close"].diff()) * df["volume"]).fillna(0).cumsum()
         df["f_obv"] = obv
-        df["f_obv_ma"] = obv.rolling(20).mean()
-        df["f_obv_ratio"] = obv / df["f_obv_ma"]
+        obv_ma = obv.rolling(20).mean()
+        df["f_obv_ma"] = obv_ma
+        df["f_obv_ratio"] = np.divide(
+            obv, obv_ma,
+            where=obv_ma != 0,
+            out=np.ones_like(obv, dtype=float)
+        )
 
         return df
 
@@ -182,12 +208,17 @@ class MLFeatureExtractor:
         return df
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
-        """计算RSI"""
+        """计算RSI（修复除零风险）"""
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-        rs = gain / loss
+
+        # 处理除零：当loss=0时，RSI=100（全是涨幅）
+        rs = np.divide(gain, loss, where=loss != 0, out=np.full_like(gain, np.nan))
         rsi = 100 - (100 / (1 + rs))
+
+        # 当loss=0时，RSI应该为100
+        rsi = rsi.fillna(100.0)
         return rsi
 
     def get_feature_names(self) -> List[str]:

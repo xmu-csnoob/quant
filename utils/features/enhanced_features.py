@@ -98,12 +98,21 @@ class EnhancedFeatureExtractor:
         # 振幅（(最高-最低)/开盘）
         df["f_daily_range"] = (df["high"] - df["low"]) / df["open"]
 
-        # 影线比例
+        # 影线比例（修复除零风险：当high==low时，影线比例为0）
         body = abs(df["close"] - df["open"])
         upper_shadow = df["high"] - df[["open", "close"]].max(axis=1)
         lower_shadow = df[["open", "close"]].min(axis=1) - df["low"]
-        df["f_upper_shadow_ratio"] = upper_shadow / (df["high"] - df["low"])
-        df["f_lower_shadow_ratio"] = lower_shadow / (df["high"] - df["low"])
+        daily_range = df["high"] - df["low"]
+        df["f_upper_shadow_ratio"] = np.divide(
+            upper_shadow, daily_range,
+            where=daily_range != 0,
+            out=np.zeros_like(upper_shadow, dtype=float)
+        )
+        df["f_lower_shadow_ratio"] = np.divide(
+            lower_shadow, daily_range,
+            where=daily_range != 0,
+            out=np.zeros_like(lower_shadow, dtype=float)
+        )
 
         # 连续上涨/下跌天数
         price_change = np.sign(df["close"].diff())
@@ -125,10 +134,14 @@ class EnhancedFeatureExtractor:
 
     def _add_volume_pattern_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """成交量形态特征"""
-        # 量比（当日成交量 / 5日/20日/60日均线）
+        # 量比（当日成交量 / 5日/20日/60日均线，修复除零风险）
         for period in [5, 20, 60]:
             vol_ma = df["volume"].rolling(period).mean()
-            df[f"f_volume_ratio_{period}"] = df["volume"] / vol_ma
+            df[f"f_volume_ratio_{period}"] = np.divide(
+                df["volume"], vol_ma,
+                where=vol_ma != 0,
+                out=np.ones_like(df["volume"], dtype=float)
+            )
 
         # 放量（成交量 > 2倍5日均量）
         vol_ma5 = df["volume"].rolling(5).mean()
