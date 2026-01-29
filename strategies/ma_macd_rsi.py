@@ -145,7 +145,7 @@ class MaMacdRsiStrategy(BaseStrategy):
 
         for i in range(max(self.ma_long, self.macd_slow, self.rsi_period), len(result)):
             row = result.iloc[i]
-            date = row["trade_date"]
+            date = row["trade_date"].strftime("%Y%m%d") if isinstance(row["trade_date"], pd.Timestamp) else row["trade_date"]
             close = row["close"]
 
             # 检查当前持仓
