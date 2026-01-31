@@ -11,8 +11,8 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data.storage.sqlite_storage import SQLiteStorage
-from data.fetchers.tushare import TushareDataFetcher
+from src.data.storage.sqlite_storage import SQLiteStorage
+from src.data.fetchers.tushare import TushareDataFetcher
 import time
 
 

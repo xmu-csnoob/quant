@@ -13,10 +13,10 @@ sys.path.insert(0, str(project_root))
 
 import pandas as pd
 from strategies import MaMacdRsiStrategy
-from backtesting.simple_backtester import SimpleBacktester
-from data.fetchers.mock import MockDataFetcher
-from data.api.data_manager import DataManager
-from data.storage.storage import DataStorage
+from src.backtesting.simple_backtester import SimpleBacktester
+from src.data.fetchers.mock import MockDataFetcher
+from src.data.api.data_manager import DataManager
+from src.data.storage.storage import DataStorage
 
 
 def run_backtest(scenario: str = "bull"):

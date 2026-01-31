@@ -1,0 +1,144 @@
+{
+  "initial_capital": 1000000,
+  "final_value": 1029630.1658000001,
+  "total_return": 0.029630165800000077,
+  "trades": [
+    {
+      "date": "2025-01-06",
+      "ts_code": "000536.SZ",
+      "action": "buy",
+      "price": 4.08,
+      "quantity": 73500,
+      "amount": 299969.964,
+      "capital_after": 700030.0360000001
+    },
+    {
+      "date": "2025-01-06",
+      "ts_code": "000586.SZ",
+      "action": "buy",
+      "price": 8.51,
+      "quantity": 24600,
+      "amount": 209408.8038,
+      "capital_after": 490621.2322000001
+    },
+    {
+      "date": "2025-01-06",
+      "ts_code": "000548.SZ",
+      "action": "buy",
+      "price": 4.88,
+      "quantity": 30100,
+      "amount": 146932.06639999998,
+      "capital_after": 343689.1658000001
+    }
+  ],
+  "daily_values": [
+    {
+      "date": "20250102",
+      "total_value": 1000000,
+      "capital": 1000000,
+      "positions": 0
+    },
+    {
+      "date": "20250103",
+      "total_value": 1000000,
+      "capital": 1000000,
+      "positions": 0
+    },
+    {
+      "date": "20250106",
+      "total_value": 999803.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250107",
+      "total_value": 1031781.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250108",
+      "total_value": 1033245.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250109",
+      "total_value": 1042630.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250110",
+      "total_value": 1010383.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250113",
+      "total_value": 1010305.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250114",
+      "total_value": 1055149.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250115",
+      "total_value": 1047524.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250116",
+      "total_value": 1058602.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250117",
+      "total_value": 1057806.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250120",
+      "total_value": 1062489.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250121",
+      "total_value": 1051307.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250122",
+      "total_value": 1066612.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250123",
+      "total_value": 1088009.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250124",
+      "total_value": 1060567.1658,
+      "capital": 343689.1658000001,
+      "positions": 3
+    },
+    {
+      "date": "20250127",
+      "total_value": 1029630.1658000001,
+      "capital": 343689.1658000001,
+      "positions": 3
+    }
+  ]
+}

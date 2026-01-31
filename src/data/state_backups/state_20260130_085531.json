@@ -1,0 +1,133 @@
+{
+  "capital": 399479.5052,
+  "positions": {
+    "000536.SZ": {
+      "entry_date": "2025-01-06",
+      "entry_price": 4.08,
+      "quantity": 73500
+    },
+    "000548.SZ": {
+      "entry_date": "2025-01-06",
+      "quantity": 30100,
+      "entry_price": 4.88
+    },
+    "000590.SZ": {
+      "entry_date": "2026-01-30",
+      "entry_price": 6.9,
+      "quantity": 24700
+    }
+  },
+  "trades": [
+    {
+      "date": "2025-01-06",
+      "ts_code": "000536.SZ",
+      "action": "buy",
+      "price": 4.08,
+      "quantity": 73500,
+      "amount": 299969.96,
+      "capital_after": 700030.04
+    },
+    {
+      "date": "2025-01-06",
+      "ts_code": "000586.SZ",
+      "action": "buy",
+      "price": 8.51,
+      "quantity": 24600,
+      "amount": 209408.8,
+      "capital_after": 490621.24
+    },
+    {
+      "date": "2025-01-06",
+      "ts_code": "000548.SZ",
+      "action": "buy",
+      "price": 4.88,
+      "quantity": 30100,
+      "amount": 146932.07,
+      "capital_after": 343689.17
+    },
+    {
+      "date": "2026-01-30",
+      "ts_code": "000586.SZ",
+      "action": "sell",
+      "price": 9.21,
+      "quantity": 24600,
+      "amount": 226271.46420000005,
+      "pnl": 16925.464200000046,
+      "pnl_ratio": 0.08084923619271467,
+      "capital_after": 569960.6342
+    },
+    {
+      "date": "2026-01-30",
+      "ts_code": "000590.SZ",
+      "action": "buy",
+      "price": 6.9,
+      "quantity": 24700,
+      "amount": 170481.129,
+      "capital_after": 399479.5052
+    }
+  ],
+  "daily_values": [
+    {
+      "date": "2025-01-29",
+      "total_value": 1029630.17,
+      "capital": 343689.17,
+      "positions": 3
+    },
+    {
+      "date": "20260130",
+      "total_value": 999803.1699999999,
+      "capital": 343689.17,
+      "positions": 3,
+      "market_value": 656114.0
+    },
+    {
+      "date": "20260129",
+      "total_value": 1191127.5052,
+      "capital": 399479.5052,
+      "positions": 3,
+      "market_value": 791648.0
+    },
+    {
+      "date": "20260129",
+      "total_value": 1191127.5052,
+      "capital": 399479.5052,
+      "positions": 3,
+      "market_value": 791648.0
+    },
+    {
+      "date": "20260130",
+      "total_value": 1016677.5052,
+      "capital": 399479.5052,
+      "positions": 3,
+      "market_value": 617198.0
+    },
+    {
+      "date": "20260130",
+      "total_value": 1016677.5052,
+      "capital": 399479.5052,
+      "positions": 3,
+      "market_value": 617198.0
+    },
+    {
+      "date": "20260130",
+      "total_value": 1016677.5052,
+      "capital": 399479.5052,
+      "positions": 3,
+      "market_value": 617198.0
+    }
+  ],
+  "initial_capital": 1000000,
+  "last_update": "2026-01-30 08:50:16",
+  "note": "\u4ece\u5386\u53f2\u56de\u6d4b\u8fc1\u79fb\uff0c\u5c06\u4ece2025-01-30\u6536\u76d8\u540e\u8ba1\u7b97\u6536\u76ca",
+  "capital_0129": 343689.17,
+  "market_value_0129": 656114.0,
+  "total_value_0129": 999803.1699999999,
+  "rebalance_history": [
+    {
+      "date": "2026-01-30",
+      "sell": "000586.SZ",
+      "buy": "000590.SZ",
+      "reason": "\u4fe1\u53f7\u4f18\u5316: 000586.SZ\u6982\u73870.56 -> 000590.SZ\u6982\u73870.74"
+    }
+  ]
+}
