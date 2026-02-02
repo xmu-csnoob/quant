@@ -1,5 +1,31 @@
 # A股量化交易系统
 
+## 子仓库
+
+此项目已拆分为多个独立仓库，便于多 Agent 并行开发：
+
+| 仓库 | 职责 | Agent | 状态 |
+|------|------|-------|------|
+| [quant-data](https://github.com/xmu-csnoob/quant-data) | 数据采集、存储、API | Agent A | ![stars](https://img.shields.io/github/stars/xmu-csnoob/quant-data?style=social) |
+| [quant-strategies](https://github.com/xmu-csnoob/quant-strategies) | 策略研究、回测、模型 | Agent B | ![stars](https://img.shields.io/github/stars/xmu-csnoob/quant-strategies?style=social) |
+| [quant-trading](https://github.com/xmu-csnoob/quant-trading) | 实盘交易、风控 | Agent C | ![stars](https://img.shields.io/github/stars/xmu-csnoob/quant-trading?style=social) |
+| [quant-infra](https://github.com/xmu-csnoob/quant-infra) | 基础设施、文档 | PM | ![stars](https://img.shields.io/github/stars/xmu-csnoob/quant-infra?style=social) |
+
+### 克隆包含子模块的完整仓库
+
+```bash
+git clone --recurse-submodules git@github.com:xmu-csnoob/quant.git
+cd quant
+```
+
+### 更新子模块
+
+```bash
+git submodule update --remote --merge
+```
+
+---
+
 ## 核心目标
 通过量化策略在中国A股市场实现稳定盈利
 

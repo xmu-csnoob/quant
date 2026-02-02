@@ -1,0 +1,12 @@
+[submodule "modules/data"]
+	path = modules/data
+	url = git@github.com:xmu-csnoob/quant-data.git
+[submodule "modules/strategies"]
+	path = modules/strategies
+	url = git@github.com:xmu-csnoob/quant-strategies.git
+[submodule "modules/trading"]
+	path = modules/trading
+	url = git@github.com:xmu-csnoob/quant-trading.git
+[submodule "modules/infra"]
+	path = modules/infra
+	url = git@github.com:xmu-csnoob/quant-infra.git
