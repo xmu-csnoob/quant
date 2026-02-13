@@ -242,3 +242,108 @@ python tests/strategies/test_strategy_backtest.py
 2. **Validation**: Use Tushare real data
 3. **Paper trading**: Use MockTradingAPI or GM platform
 4. **Live trading**: Small capital first, then scale up
+
+---
+
+## Git Workflow & CI/CD
+
+### Branch Protection Rules
+
+The `main` branch is protected. **Direct pushes to `main` are NOT allowed.**
+
+All changes must go through Pull Request (PR) with passing CI checks.
+
+### Required CI Checks
+
+Before merging, all PRs must pass these checks:
+- `python-test (3.10)` - Python 3.10 tests
+- `python-test (3.11)` - Python 3.11 tests
+- `python-test (3.12)` - Python 3.12 tests
+- `python-lint` - Code style checks (flake8, black, isort)
+- `frontend` - Frontend build
+- `security` - Dependency security scan
+
+### Standard PR Workflow
+
+```bash
+# 1. Create a feature branch from main
+git checkout main
+git pull
+git checkout -b feature/your-feature-name
+
+# 2. Make your changes and commit
+git add .
+git commit -m "feat: your feature description"
+
+# 3. Push the branch to remote
+git push -u origin feature/your-feature-name
+
+# 4. Create a Pull Request
+gh pr create --title "feat: your feature description" --body "Description of changes"
+
+# 5. Wait for CI to pass (check status)
+gh pr checks <pr-number>
+
+# 6. After CI passes and review, merge the PR
+gh pr merge <pr-number> --merge --delete-branch
+
+# 7. Sync local main
+git checkout main
+git pull
+```
+
+### Commit Message Convention
+
+Use conventional commit format:
+
+| Prefix | Usage |
+|--------|-------|
+| `feat:` | New feature |
+| `fix:` | Bug fix |
+| `refactor:` | Code refactoring |
+| `test:` | Adding/updating tests |
+| `docs:` | Documentation changes |
+| `ci:` | CI/CD changes |
+| `chore:` | Maintenance tasks |
+
+Example:
+```
+feat(trading): add price limit checking for buy/sell orders
+```
+
+### GitHub CLI (gh) Authentication
+
+When working on a new machine, authenticate with:
+
+```bash
+# Login with token
+echo "YOUR_GITHUB_TOKEN" | gh auth login --with-token
+
+# Verify authentication
+gh auth status
+```
+
+### Troubleshooting
+
+**If push is rejected:**
+```bash
+# You're probably trying to push directly to main
+# Create a branch instead:
+git checkout -b feature/your-feature
+git push -u origin feature/your-feature
+```
+
+**If CI fails:**
+```bash
+# Check what failed
+gh pr checks <pr-number>
+
+# View detailed logs
+gh run view --log-failed
+```
+
+**Check CI status:**
+```bash
+gh run list --limit 5
+```
+
