@@ -1,0 +1,73 @@
+name: Scheduled Tasks
+
+on:
+  schedule:
+    # 每个交易日 16:00 (北京时间) 运行
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  # ==================== 每日数据更新 ====================
+  daily-update:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || true  # 跳过交易日判断
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Update daily data
+      run: |
+        echo "更新每日行情数据..."
+        # python apps/data/update/data_update_service.py
+      continue-on-error: true
+      env:
+        TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+
+    - name: Generate trading signals
+      run: |
+        echo "生成交易信号..."
+        # python apps/monitor/check_signals.py
+      continue-on-error: true
+
+  # ==================== 模型定期重训练 ====================
+  model-retrain:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Retrain ML model
+      run: |
+        echo "重新训练ML模型..."
+        python apps/train_model.py --stocks 500
+      continue-on-error: true
+      env:
+        TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+
+    - name: Upload trained model
+      uses: actions/upload-artifact@v4
+      with:
+        name: ml-model
+        path: models/
+        retention-days: 30

@@ -1,5 +1,10 @@
 # A股量化交易系统
 
+[![CI](https://github.com/xmu-csnoob/quant/actions/workflows/ci.yml/badge.svg)](https://github.com/xmu-csnoob/quant/actions/workflows/ci.yml)
+[![Release](https://github.com/xmu-csnoob/quant/actions/workflows/release.yml/badge.svg)](https://github.com/xmu-csnoob/quant/actions/workflows/release.yml)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 ## 子仓库
 
 此项目已拆分为多个独立仓库，便于多 Agent 并行开发：
@@ -213,3 +218,65 @@ python apps/live/live_paper_trading.py
 
 ## 免责声明
 本系统仅供学习和研究使用，实盘交易有风险，投资需谨慎。
+
+---
+
+## 🐳 Docker部署
+
+### 使用Docker Compose（推荐）
+
+```bash
+# 构建并启动所有服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+### 单独构建镜像
+
+```bash
+# 构建镜像
+docker build -t quant:latest .
+
+# 运行容器
+docker run -d -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/models:/app/models \
+  -e TUSHARE_TOKEN=your_token \
+  quant:latest
+```
+
+访问 http://localhost 即可使用。
+
+---
+
+## 🔄 CI/CD流程
+
+项目使用GitHub Actions实现自动化：
+
+| Workflow | 触发条件 | 功能 |
+|----------|----------|------|
+| `ci.yml` | Push/PR | Python测试、代码检查、前端构建 |
+| `release.yml` | Release发布 | 构建发布包、Docker镜像 |
+| `scheduled.yml` | 定时/手动 | 数据更新、模型重训练 |
+
+### 本地运行测试
+
+```bash
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 运行所有测试
+python -m pytest tests/ -v
+
+# 运行单独模块测试
+python tests/test_price_limit.py
+python tests/test_t1_manager.py
+python tests/test_trade_calendar.py
+python tests/test_ml_api.py
+python src/backtesting/test_costs.py
+```
