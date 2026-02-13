@@ -34,7 +34,7 @@ const Backtest: React.FC = () => {
       ]);
       setMlModelInfo(info);
       setFeatureImportance(features);
-    } catch (error) {
+    } catch {
       console.error('加载ML信息失败:', error);
     } finally {
       setMlLoading(false);
@@ -92,7 +92,7 @@ const Backtest: React.FC = () => {
       };
 
       pollResult();
-    } catch (error) {
+    } catch {
       message.error('启动回测失败');
       setLoading(false);
     }

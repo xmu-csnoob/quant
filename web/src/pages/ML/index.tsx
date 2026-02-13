@@ -29,7 +29,6 @@ import {
   BarChartOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import dayjs from 'dayjs';
 import { mlApi } from '../../api';
 import type {
   MLStatus,
@@ -74,7 +73,7 @@ const MLPredictionPage: React.FC = () => {
       setTopBuySignals(buySignals);
       setTopSellSignals(sellSignals);
       setFeatureImportance(features);
-    } catch (error) {
+    } catch {
       console.error('获取ML数据失败:', error);
     } finally {
       setLoading(false);
@@ -92,7 +91,7 @@ const MLPredictionPage: React.FC = () => {
       const result = await mlApi.predictByCode(searchCode.trim());
       setPredictionResult(result);
       message.success('预测完成');
-    } catch (error) {
+    } catch {
       message.error('预测失败，请检查股票代码是否正确');
     } finally {
       setPredicting(false);
