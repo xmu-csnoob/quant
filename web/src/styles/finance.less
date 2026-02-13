@@ -1,0 +1,93 @@
+// A股量化系统 - 金融主题配色
+// A股习惯: 红涨绿跌
+
+// 主题色
+@primary-color: #1890ff;
+@success-color: #3f8600;
+@warning-color: #faad14;
+@error-color: #cf1322;
+
+// A股特有配色
+@rise-color: #cf1322;      // 上涨 - 红色
+@fall-color: #3f8600;      // 下跌 - 绿色
+@flat-color: #8c8c8c;      // 平盘 - 灰色
+
+// 布局色
+@layout-bg: #f0f2f5;
+@card-bg: #ffffff;
+@sidebar-bg: #001529;
+@header-bg: #ffffff;
+
+// 文字色
+@text-primary: #262626;
+@text-secondary: #8c8c8c;
+@text-disabled: #bfbfbf;
+
+// 边框色
+@border-color: #f0f0f0;
+
+// 阴影
+@box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+@box-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+// 常用样式
+.rise-text {
+  color: @rise-color;
+}
+
+.fall-text {
+  color: @fall-color;
+}
+
+.flat-text {
+  color: @flat-color;
+}
+
+.rise-bg {
+  background-color: @rise-color;
+  color: #fff;
+}
+
+.fall-bg {
+  background-color: @fall-color;
+  color: #fff;
+}
+
+// 卡片样式
+.finance-card {
+  background: @card-bg;
+  border-radius: 8px;
+  box-shadow: @box-shadow;
+  transition: box-shadow 0.3s ease;
+
+  &:hover {
+    box-shadow: @box-shadow-hover;
+  }
+}
+
+// 仪表盘数字样式
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  font-family: 'DIN Alternate', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: @text-secondary;
+}
+
+// 表格样式优化
+.ant-table {
+  .ant-table-thead > tr > th {
+    background: #fafafa;
+    font-weight: 600;
+  }
+}
+
+// 侧边栏样式
+.sidebar-menu {
+  .ant-menu-item-selected {
+    background-color: @primary-color !important;
+  }
+}

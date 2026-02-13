@@ -1,0 +1,34 @@
+/* Layout样式 */
+
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.logo-text {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 侧边栏菜单样式 */
+.ant-layout-sider-dark .ant-menu {
+  background: transparent;
+}
+
+.ant-layout-sider-dark .ant-menu-item-selected {
+  background-color: #1890ff !important;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .ant-layout-sider {
+    position: fixed !important;
+    z-index: 100;
+  }
+}
