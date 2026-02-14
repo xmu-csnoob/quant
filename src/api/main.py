@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routers import account, trading, strategy, backtest, data, risk, ml, auth
+from src.api.routers import account, trading, strategy, backtest, data, risk, ml, auth, auto_trading
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(backtest.router)
 app.include_router(data.router)
 app.include_router(risk.router)
 app.include_router(ml.router)
+app.include_router(auto_trading.router)  # 自动交易
 
 
 @app.get("/", tags=["根路径"])
