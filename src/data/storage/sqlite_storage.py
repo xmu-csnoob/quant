@@ -223,6 +223,14 @@ class SQLiteStorage:
         )
         return cursor.fetchone()
 
+    def get_global_date_range(self) -> tuple:
+        """获取数据库中所有数据的日期范围"""
+        cursor = self.conn.execute(
+            """SELECT MIN(trade_date), MAX(trade_date), COUNT(*)
+               FROM daily_prices"""
+        )
+        return cursor.fetchone()
+
     def save_trade(
         self,
         symbol: str,

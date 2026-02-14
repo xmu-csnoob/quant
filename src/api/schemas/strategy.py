@@ -117,6 +117,10 @@ class DataStatus(BaseModel):
     last_update: datetime = Field(description="最后更新时间")
     data_sources: list[str] = Field(description="数据源")
     update_status: str = Field(description="更新状态")
+    # 新增：数据日期范围
+    min_date: Optional[str] = Field(None, description="数据最早日期")
+    max_date: Optional[str] = Field(None, description="数据最晚日期")
+    total_records: int = Field(0, description="数据总条数")
 
 
 class KlineData(BaseModel):

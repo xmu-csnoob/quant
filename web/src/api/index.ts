@@ -127,6 +127,22 @@ export const dataApi = {
     return res.data.data;
   },
 
+  // 获取可用日期范围
+  getDateRange: async (): Promise<{
+    min_date: string | null;
+    max_date: string | null;
+    total_records: number;
+    available: boolean;
+  }> => {
+    const res = await client.get<ApiResponse<{
+      min_date: string | null;
+      max_date: string | null;
+      total_records: number;
+      available: boolean;
+    }>>('/api/data/date-range');
+    return res.data.data;
+  },
+
   // 获取K线数据
   getKline: async (code: string, params?: {
     start_date?: string;

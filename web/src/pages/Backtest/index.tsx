@@ -1,10 +1,10 @@
 // 回测分析页面
 import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Form, DatePicker, Select, InputNumber, Button, message, Statistic, Table, Spin, Alert, Descriptions, Divider } from 'antd';
-import { PlayCircleOutlined, RobotOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, RobotOutlined, InfoCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import dayjs from 'dayjs';
-import { backtestApi, mlApi } from '../../api';
+import dayjs, { Dayjs } from 'dayjs';
+import { backtestApi, mlApi, dataApi } from '../../api';
 import type { BacktestConfig, BacktestResult, MLModelInfo, FeatureImportance } from '../../api/types';
 
 const { RangePicker } = DatePicker;
@@ -17,6 +17,56 @@ const Backtest: React.FC = () => {
   const [mlModelInfo, setMlModelInfo] = useState<MLModelInfo | null>(null);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportance[]>([]);
   const [mlLoading, setMlLoading] = useState(false);
+  // 新增：日期范围状态
+  const [dateRange, setDateRange] = useState<{
+    minDate: Dayjs | null;
+    maxDate: Dayjs | null;
+    available: boolean;
+    loading: boolean;
+  }>({
+    minDate: null,
+    maxDate: null,
+    available: false,
+    loading: true,
+  });
+
+  // 加载日期范围
+  useEffect(() => {
+    loadDateRange();
+  }, []);
+
+  const loadDateRange = async () => {
+    try {
+      const range = await dataApi.getDateRange();
+      if (range.available && range.min_date && range.max_date) {
+        setDateRange({
+          minDate: dayjs(range.min_date),
+          maxDate: dayjs(range.max_date),
+          available: true,
+          loading: false,
+        });
+        // 设置默认日期范围为数据库中的范围
+        form.setFieldsValue({
+          date_range: [dayjs(range.min_date), dayjs(range.max_date)],
+        });
+      } else {
+        setDateRange({
+          minDate: null,
+          maxDate: null,
+          available: false,
+          loading: false,
+        });
+      }
+    } catch (error) {
+      console.error('加载日期范围失败:', error);
+      setDateRange({
+        minDate: null,
+        maxDate: null,
+        available: false,
+        loading: false,
+      });
+    }
+  };
 
   // 加载ML模型信息
   useEffect(() => {
@@ -309,8 +359,20 @@ const Backtest: React.FC = () => {
                 name="date_range"
                 label="回测区间"
                 rules={[{ required: true, message: '请选择回测区间' }]}
+                extra={dateRange.available && dateRange.minDate && dateRange.maxDate ?
+                  `可用数据范围: ${dateRange.minDate.format('YYYY-MM-DD')} ~ ${dateRange.maxDate.format('YYYY-MM-DD')}` :
+                  '暂无数据，请先导入数据'
+                }
               >
-                <RangePicker style={{ width: '100%' }} />
+                <RangePicker
+                  style={{ width: '100%' }}
+                  disabled={!dateRange.available}
+                  disabledDate={(current: Dayjs) => {
+                    if (!dateRange.minDate || !dateRange.maxDate) return true;
+                    // 禁用超出数据范围的日期
+                    return current && (current < dateRange.minDate || current > dateRange.maxDate);
+                  }}
+                />
               </Form.Item>
 
               <Form.Item
@@ -348,12 +410,32 @@ const Backtest: React.FC = () => {
                   htmlType="submit"
                   icon={<PlayCircleOutlined />}
                   loading={loading}
+                  disabled={!dateRange.available}
                   block
                 >
                   开始回测
                 </Button>
               </Form.Item>
             </Form>
+
+            {/* 无数据警告 */}
+            {!dateRange.loading && !dateRange.available && (
+              <Alert
+                message="暂无可用数据"
+                description={
+                  <span>
+                    请先导入股票数据。
+                    <a href="https://github.com/xmu-csnoob/quant/blob/main/scripts/import_data.py" target="_blank" rel="noopener noreferrer">
+                      查看数据导入脚本
+                    </a>
+                  </span>
+                }
+                type="warning"
+                showIcon
+                icon={<WarningOutlined />}
+                style={{ marginTop: 16 }}
+              />
+            )}
           </Card>
 
           {/* ML模型信息 */}
