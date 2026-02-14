@@ -26,9 +26,10 @@ class MLStrategy(BaseStrategy):
     def __init__(
         self,
         model: object,
-        feature_extractor: MLFeatureExtractor,
+        feature_extractor,
         threshold: float = 0.02,
         prediction_period: int = 5,
+        feature_cols: Optional[list] = None,
     ):
         """
         初始化
@@ -38,6 +39,7 @@ class MLStrategy(BaseStrategy):
             feature_extractor: 特征提取器
             threshold: 买入阈值（预测收益率 > 此值时买入）
             prediction_period: 预测周期（天）
+            feature_cols: 特征列名列表（可选，如不指定则使用所有f_开头的列）
         """
         super().__init__(name=f"ML_{model.__class__.__name__}")
 
@@ -45,10 +47,11 @@ class MLStrategy(BaseStrategy):
         self.feature_extractor = feature_extractor
         self.threshold = threshold
         self.prediction_period = prediction_period
+        self.feature_cols = feature_cols
 
         logger.info(
             f"ML Strategy initialized: {model.__class__.__name__}, "
-            f"threshold={threshold:.2%}"
+            f"threshold={threshold:.2%}, features={len(feature_cols) if feature_cols else 'auto'}"
         )
 
     def generate_signals(self, df: pd.DataFrame) -> list[Signal]:
@@ -65,7 +68,10 @@ class MLStrategy(BaseStrategy):
         df = self.feature_extractor.extract(df)
 
         # 获取特征列
-        feature_cols = [c for c in df.columns if c.startswith("f_")]
+        if self.feature_cols:
+            feature_cols = self.feature_cols
+        else:
+            feature_cols = [c for c in df.columns if c.startswith("f_")]
 
         # 过滤有效数据（特征无NaN）
         df_valid = df.dropna(subset=feature_cols).copy()
@@ -76,7 +82,24 @@ class MLStrategy(BaseStrategy):
 
         # 预测
         X = df_valid[feature_cols].values
-        predictions = self.model.predict(X)
+
+        # 处理NaN（用0填充）
+        import numpy as np
+        X = np.nan_to_num(X, nan=0.0)
+
+        # 根据模型类型选择预测方式
+        try:
+            import xgboost as xgb
+            if isinstance(self.model, xgb.Booster):
+                # XGBoost Booster需要DMatrix
+                dmatrix = xgb.DMatrix(X)
+                predictions = self.model.predict(dmatrix)
+            else:
+                # sklearn-style模型
+                predictions = self.model.predict(X)
+        except ImportError:
+            # 如果没有xgboost，尝试sklearn方式
+            predictions = self.model.predict(X)
 
         # 生成信号
         signals = []
