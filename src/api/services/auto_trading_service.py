@@ -16,8 +16,6 @@ from loguru import logger
 from src.data.storage.sqlite_storage import SQLiteStorage
 from src.api.services.trading_service import TradingService
 from src.strategies.base import Signal, SignalType
-from src.strategies import MaMacdRsiStrategy
-from src.strategies.mean_reversion import MeanReversionStrategy
 
 
 class AutoTradingService:
@@ -27,22 +25,22 @@ class AutoTradingService:
         self._storage = SQLiteStorage()
         self._trading_service = TradingService(account_type)
         self._account_type = account_type
+        self._ml_strategy = None  # 延迟加载
 
-        # 可用的策略
-        self._strategies = {
-            "ma_macd_rsi": MaMacdRsiStrategy(),
-            "mean_reversion": MeanReversionStrategy(),
-        }
-
-        # 当前激活的策略
-        self._active_strategy = "ma_macd_rsi"
+    def _get_ml_strategy(self):
+        """延迟加载ML策略"""
+        if self._ml_strategy is None:
+            from src.api.services.strategy_service import StrategyService
+            strategy_service = StrategyService()
+            self._ml_strategy = strategy_service.get_strategy_instance("ml_strategy")
+        return self._ml_strategy
 
     def set_strategy(self, strategy_id: str) -> bool:
-        """设置使用的策略"""
-        if strategy_id in self._strategies:
-            self._active_strategy = strategy_id
-            logger.info(f"切换策略: {strategy_id}")
+        """设置使用的策略（目前只支持ml_strategy）"""
+        if strategy_id == "ml_strategy":
+            logger.info("使用ML策略")
             return True
+        logger.warning(f"不支持的策略: {strategy_id}")
         return False
 
     def get_available_stocks(self) -> List[str]:
@@ -69,16 +67,16 @@ class AutoTradingService:
         """
         result = {
             "timestamp": datetime.now().isoformat(),
-            "strategy": self._active_strategy,
+            "strategy": "ml_strategy",
             "account_type": self._account_type,
             "signals": [],
             "trades": [],
             "errors": [],
         }
 
-        strategy = self._strategies.get(self._active_strategy)
+        strategy = self._get_ml_strategy()
         if not strategy:
-            result["errors"].append(f"策略不存在: {self._active_strategy}")
+            result["errors"].append("ML策略加载失败")
             return result
 
         # 1. 获取当前持仓
@@ -281,7 +279,7 @@ class AutoTradingService:
 
         return {
             "account_type": self._account_type,
-            "active_strategy": self._active_strategy,
+            "strategy": "ml_strategy",
             "cash": balance.get("cash", 0),
             "initial_capital": balance.get("initial_capital", 1000000),
             "positions": positions,

@@ -27,34 +27,16 @@ class StrategyService:
     """策略服务"""
 
     def __init__(self):
-        # 系统内置的策略（只保留已实现的）
+        # 系统内置的策略（聚焦ML策略）
         self._strategies = [
-            Strategy(
-                id="ma_macd_rsi",
-                name="MA+MACD+RSI趋势策略",
-                description="基于均线、MACD和RSI的趋势跟踪策略",
-                status=StrategyStatus.RUNNING,
-                return_rate=15.8,
-                win_rate=62.5,
-                trade_count=48
-            ),
-            Strategy(
-                id="mean_reversion",
-                name="均值回归策略",
-                description="基于布林带和RSI的均值回归策略",
-                status=StrategyStatus.RUNNING,
-                return_rate=12.3,
-                win_rate=58.2,
-                trade_count=36
-            ),
             Strategy(
                 id="ml_strategy",
                 name="机器学习策略",
-                description="基于XGBoost的预测策略",
-                status=StrategyStatus.STOPPED,
-                return_rate=18.5,
-                win_rate=65.8,
-                trade_count=42
+                description="基于XGBoost的预测策略，通过历史数据训练模型预测股价涨跌",
+                status=StrategyStatus.RUNNING,
+                return_rate=0,
+                win_rate=0,
+                trade_count=0
             ),
         ]
         self._signals: List[Signal] = []
@@ -79,24 +61,11 @@ class StrategyService:
         return False
 
     def get_strategy_instance(self, strategy_id: str):
-        """获取策略实例"""
-        from src.strategies import MaMacdRsiStrategy
-        from src.strategies.mean_reversion import MeanReversionStrategy
-        from src.strategies.ml_strategy import MLStrategy
-        from src.utils.features.enhanced_features import EnhancedFeatureExtractor
-
-        # ML策略需要加载模型，单独处理
+        """获取策略实例（目前只支持ML策略）"""
         if strategy_id == "ml_strategy":
             return self._create_ml_strategy()
 
-        strategy_map = {
-            "ma_macd_rsi": MaMacdRsiStrategy,
-            "mean_reversion": MeanReversionStrategy,
-        }
-
-        strategy_class = strategy_map.get(strategy_id)
-        if strategy_class:
-            return strategy_class()
+        logger.warning(f"不支持的策略: {strategy_id}")
         return None
 
     def _create_ml_strategy(self):
