@@ -160,6 +160,18 @@ class BacktestResult:
         cost_config: 成本配置
         t1_violations: T+1违规次数（尝试当天买入后卖出）
         t1_skipped_sells: 因T+1跳过的卖出信号数
+        annual_return: 年化收益率
+        sortino_ratio: 索提诺比率
+        calmar_ratio: Calmar比率
+        information_ratio: 信息比率
+        alpha: Alpha系数（相对基准）
+        beta: Beta系数（相对基准）
+        profit_factor: 盈亏比
+        avg_win: 平均盈利
+        avg_loss: 平均亏损
+        max_consecutive_wins: 最大连续盈利次数
+        max_consecutive_losses: 最大连续亏损次数
+        benchmark_return: 基准收益率
     """
 
     strategy_name: str
@@ -180,6 +192,19 @@ class BacktestResult:
     cost_config: Optional[CostConfig] = None
     t1_violations: int = 0  # T+1违规次数
     t1_skipped_sells: int = 0  # 因T+1跳过的卖出
+    # 高级绩效指标
+    annual_return: float = 0.0
+    sortino_ratio: float = 0.0
+    calmar_ratio: float = 0.0
+    information_ratio: float = 0.0
+    alpha: float = 0.0
+    beta: float = 1.0
+    profit_factor: float = 0.0
+    avg_win: float = 0.0
+    avg_loss: float = 0.0
+    max_consecutive_wins: int = 0
+    max_consecutive_losses: int = 0
+    benchmark_return: float = 0.0
 
     def print_summary(self):
         """打印回测结果摘要"""
@@ -190,14 +215,30 @@ class BacktestResult:
         print(f"初始资金: {self.initial_capital:,.2f}")
         print(f"最终资金: {self.final_capital:,.2f}")
         print(f"总收益率: {self.total_return*100:.2f}%")
+        if self.annual_return != 0:
+            print(f"年化收益: {self.annual_return*100:.2f}%")
         print("-" * 70)
         print(f"交易次数: {self.trade_count}")
         print(f"盈利次数: {self.win_count}")
         print(f"亏损次数: {self.lose_count}")
         print(f"胜率: {self.win_rate*100:.2f}%")
+        if self.profit_factor > 0:
+            print(f"盈亏比: {self.profit_factor:.2f}")
+        if self.avg_win != 0 or self.avg_loss != 0:
+            print(f"平均盈利: {self.avg_win:,.2f} | 平均亏损: {self.avg_loss:,.2f}")
+        if self.max_consecutive_wins > 0 or self.max_consecutive_losses > 0:
+            print(f"最大连胜: {self.max_consecutive_wins} | 最大连亏: {self.max_consecutive_losses}")
         print("-" * 70)
         print(f"最大回撤: {self.max_drawdown*100:.2f}%")
         print(f"夏普比率: {self.sharpe_ratio:.2f}")
+        if self.sortino_ratio != 0:
+            print(f"索提诺比率: {self.sortino_ratio:.2f}")
+        if self.calmar_ratio != 0:
+            print(f"Calmar比率: {self.calmar_ratio:.2f}")
+        if self.information_ratio != 0:
+            print(f"信息比率: {self.information_ratio:.2f}")
+        if self.alpha != 0 or self.beta != 1.0:
+            print(f"Alpha: {self.alpha:.4f} | Beta: {self.beta:.4f}")
         if self.total_costs > 0:
             print("-" * 70)
             print(f"总交易成本: {self.total_costs:,.2f}")
@@ -274,6 +315,19 @@ class SimpleBacktester:
                 cost_config=self.cost_config,
                 t1_violations=0,
                 t1_skipped_sells=0,
+                # 高级指标默认值
+                annual_return=0.0,
+                sortino_ratio=0.0,
+                calmar_ratio=0.0,
+                information_ratio=0.0,
+                alpha=0.0,
+                beta=1.0,
+                profit_factor=0.0,
+                avg_win=0.0,
+                avg_loss=0.0,
+                max_consecutive_wins=0,
+                max_consecutive_losses=0,
+                benchmark_return=(float(df.iloc[-1]["close"]) - float(df.iloc[0]["close"])) / float(df.iloc[0]["close"]),
             )
 
         # 执行交易
@@ -480,13 +534,79 @@ class SimpleBacktester:
         lose_count = sum(1 for t in trades if t.pnl < 0)
         win_rate = win_count / len(trades) if trades else 0
 
+        # 计算回测期间天数
+        start_dt = parse_date(str(df.iloc[0]["trade_date"]))
+        end_dt = parse_date(str(df.iloc[-1]["trade_date"]))
+        days = (end_dt - start_dt).days
+        years = max(days / 365.0, 1/252)  # 至少1个交易日
+
+        # 年化收益率
+        annual_return = (1 + total_return) ** (1 / years) - 1 if total_return > -1 else 0
+
         # 计算夏普比率（简化版）
         if trades:
             returns = [t.pnl_ratio for t in trades]
             sharpe = np.mean(returns) / np.std(returns) if np.std(returns) > 0 else 0
             sharpe_ratio = sharpe * np.sqrt(252)  # 年化
+
+            # 索提诺比率（只考虑下行风险）
+            negative_returns = [r for r in returns if r < 0]
+            if negative_returns:
+                downside_std = np.std(negative_returns)
+                sortino_ratio = (np.mean(returns) / downside_std) * np.sqrt(252) if downside_std > 0 else 0
+            else:
+                sortino_ratio = float('inf') if np.mean(returns) > 0 else 0
         else:
             sharpe_ratio = 0
+            sortino_ratio = 0
+
+        # Calmar比率（年化收益/最大回撤）
+        calmar_ratio = annual_return / max_drawdown if max_drawdown > 0 else 0
+
+        # 盈亏比（总盈利/总亏损）
+        total_profit = sum(t.pnl for t in trades if t.pnl > 0)
+        total_loss = abs(sum(t.pnl for t in trades if t.pnl < 0))
+        profit_factor = total_profit / total_loss if total_loss > 0 else float('inf') if total_profit > 0 else 0
+
+        # 平均盈利/亏损
+        avg_win = total_profit / win_count if win_count > 0 else 0
+        avg_loss = total_loss / lose_count if lose_count > 0 else 0
+
+        # 最大连续盈利/亏损次数
+        max_consecutive_wins = 0
+        max_consecutive_losses = 0
+        current_wins = 0
+        current_losses = 0
+        for t in trades:
+            if t.pnl > 0:
+                current_wins += 1
+                current_losses = 0
+                max_consecutive_wins = max(max_consecutive_wins, current_wins)
+            elif t.pnl < 0:
+                current_losses += 1
+                current_wins = 0
+                max_consecutive_losses = max(max_consecutive_losses, current_losses)
+
+        # 基准收益率（买入持有）
+        benchmark_return = (float(df.iloc[-1]["close"]) - float(df.iloc[0]["close"])) / float(df.iloc[0]["close"])
+
+        # Alpha和Beta（相对基准）
+        if trades and benchmark_return != 0:
+            # 简化计算：Beta = 策略波动率 / 基准波动率 * 相关系数
+            strategy_volatility = np.std([t.pnl_ratio for t in trades]) * np.sqrt(252) if trades else 0.0
+            # 使用简单的Beta估计
+            beta = float(min(max(total_return / benchmark_return if benchmark_return != 0 else 1.0, 0), 2))
+            # Alpha = 策略收益 - Beta * 基准收益
+            alpha = float(annual_return - beta * ((1 + benchmark_return) ** (1 / years) - 1))
+
+            # 信息比率
+            excess_return = total_return - benchmark_return
+            tracking_error = np.std([t.pnl_ratio for t in trades]) if trades else 0.0
+            information_ratio = float((excess_return / tracking_error) * np.sqrt(252)) if tracking_error > 0 else 0.0
+        else:
+            alpha = 0.0
+            beta = 1.0
+            information_ratio = 0.0
 
         return BacktestResult(
             strategy_name=strategy.name,
@@ -507,4 +627,17 @@ class SimpleBacktester:
             cost_config=self.cost_config,
             t1_violations=t1_violations,
             t1_skipped_sells=t1_skipped_sells,
+            # 高级指标
+            annual_return=annual_return,
+            sortino_ratio=sortino_ratio,
+            calmar_ratio=calmar_ratio,
+            information_ratio=information_ratio,
+            alpha=alpha,
+            beta=beta,
+            profit_factor=profit_factor,
+            avg_win=avg_win,
+            avg_loss=avg_loss,
+            max_consecutive_wins=max_consecutive_wins,
+            max_consecutive_losses=max_consecutive_losses,
+            benchmark_return=benchmark_return,
         )

@@ -77,10 +77,20 @@ class MLPredictionService:
             else:
                 logger.warning(f"特征列表文件不存在: {self.feature_path}")
 
+            # 尝试加载模型信息
+            info_path = Path("models/model_info.json")
+            if info_path.exists():
+                with open(info_path, 'r') as f:
+                    self._model_info = json.load(f)
+                logger.info(f"模型信息加载成功: {self._model_info.get('model_version', 'unknown')}")
+            else:
+                self._model_info = None
+
         except Exception as e:
             logger.error(f"ML模型加载失败: {e}")
             self.model = None
             self.feature_cols = None
+            self._model_info = None
 
     def is_model_loaded(self) -> bool:
         """检查模型是否已加载"""
@@ -91,12 +101,22 @@ class MLPredictionService:
         if not self.is_model_loaded():
             return None
 
-        # 尝试读取模型训练信息
-        info_path = Path("models/model_info.json")
-        if info_path.exists():
-            with open(info_path, 'r') as f:
-                info = json.load(f)
-            return MLModelInfo(**info)
+        # 使用缓存的模型信息
+        if hasattr(self, '_model_info') and self._model_info:
+            return MLModelInfo(
+                model_name=self._model_info.get('model_name', 'XGBoost Classifier'),
+                model_version=self._model_info.get('model_version', '1.0.0'),
+                model_path=self._model_info.get('model_path', str(self.model_path)),
+                feature_count=self._model_info.get('feature_count', len(self.feature_cols) if self.feature_cols else 0),
+                prediction_period=self._model_info.get('prediction_period', 5),
+                train_samples=self._model_info.get('train_samples', 0),
+                test_samples=self._model_info.get('test_samples', 0),
+                train_auc=self._model_info.get('train_auc', 0.0),
+                test_auc=self._model_info.get('test_auc', 0.0),
+                train_accuracy=self._model_info.get('train_accuracy', 0.0),
+                test_accuracy=self._model_info.get('test_accuracy', 0.0),
+                created_at=self._model_info.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
 
         # 返回基本信息
         return MLModelInfo(
