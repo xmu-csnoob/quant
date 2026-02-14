@@ -81,6 +81,14 @@ class MeanReversionStrategy(BaseStrategy):
             )
         )
 
+    @staticmethod
+    def _format_date(trade_date) -> str:
+        """格式化日期为YYYYMMDD字符串"""
+        if hasattr(trade_date, 'strftime'):
+            return trade_date.strftime("%Y%m%d")
+        else:
+            return str(trade_date).replace('-', '')[:8]
+
     def generate_signals(self, df: pd.DataFrame) -> list[Signal]:
         """
         生成均值回归信号
@@ -102,7 +110,7 @@ class MeanReversionStrategy(BaseStrategy):
 
         for i in range(self.ma_period, len(df)):
             row = df.iloc[i]
-            date = row["trade_date"].strftime("%Y%m%d")
+            date = self._format_date(row["trade_date"])
             price = row["close"]
 
             # 检查持仓状态
@@ -151,7 +159,7 @@ class MeanReversionStrategy(BaseStrategy):
         # 至少满足一个条件，且分数足够
         if score >= 0.35:
             return Signal(
-                date=row["trade_date"].strftime("%Y%m%d"),
+                date=self._format_date(row["trade_date"]),
                 signal_type=SignalType.BUY,
                 price=row["close"],
                 reason="; ".join(reasons),
@@ -181,7 +189,7 @@ class MeanReversionStrategy(BaseStrategy):
         # 至少满足一个条件
         if score >= 0.4:
             return Signal(
-                date=row["trade_date"].strftime("%Y%m%d"),
+                date=self._format_date(row["trade_date"]),
                 signal_type=SignalType.SELL,
                 price=row["close"],
                 reason="; ".join(reasons),
