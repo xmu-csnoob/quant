@@ -106,22 +106,69 @@ class SQLiteStorage:
                 price REAL NOT NULL,
                 quantity INTEGER NOT NULL,
                 amount REAL NOT NULL,
-                reason TEXT
+                reason TEXT,
+                account_type TEXT DEFAULT 'paper'
             )
         """)
 
         # 持仓记录表
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS positions (
-                symbol TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                account_type TEXT NOT NULL DEFAULT 'paper',
                 quantity INTEGER NOT NULL,
                 avg_cost REAL NOT NULL,
                 current_price REAL,
                 market_value REAL,
                 unrealized_pnl REAL,
+                updated_at TEXT,
+                PRIMARY KEY (symbol, account_type)
+            )
+        """)
+
+        # 账户资金表
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS account_balance (
+                account_type TEXT PRIMARY KEY,
+                cash REAL NOT NULL DEFAULT 0,
+                initial_capital REAL NOT NULL DEFAULT 0,
                 updated_at TEXT
             )
         """)
+
+        # 迁移旧数据：添加 account_type 列（如果不存在）
+        try:
+            self.conn.execute("ALTER TABLE trades ADD COLUMN account_type TEXT DEFAULT 'paper'")
+        except:
+            pass  # 列已存在
+
+        try:
+            # 对于positions表，需要重建
+            cursor = self.conn.execute("PRAGMA table_info(positions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'account_type' not in columns:
+                # 备份并重建
+                self.conn.execute("""
+                    CREATE TABLE IF NOT EXISTS positions_new (
+                        symbol TEXT NOT NULL,
+                        account_type TEXT NOT NULL DEFAULT 'paper',
+                        quantity INTEGER NOT NULL,
+                        avg_cost REAL NOT NULL,
+                        current_price REAL,
+                        market_value REAL,
+                        unrealized_pnl REAL,
+                        updated_at TEXT,
+                        PRIMARY KEY (symbol, account_type)
+                    )
+                """)
+                self.conn.execute("""
+                    INSERT OR IGNORE INTO positions_new (symbol, account_type, quantity, avg_cost, current_price, market_value, unrealized_pnl, updated_at)
+                    SELECT symbol, 'paper', quantity, avg_cost, current_price, market_value, unrealized_pnl, updated_at FROM positions
+                """)
+                self.conn.execute("DROP TABLE positions")
+                self.conn.execute("ALTER TABLE positions_new RENAME TO positions")
+        except Exception as e:
+            logger.debug(f"Migration check: {e}")
 
         self.conn.commit()
 
@@ -238,25 +285,26 @@ class SQLiteStorage:
         side: str,
         price: float,
         quantity: int,
-        reason: str = ""
+        reason: str = "",
+        account_type: str = "paper"
     ):
         """保存交易记录"""
         self.conn.execute(
             """INSERT INTO trades
-               (symbol, trade_date, side, price, quantity, amount, reason)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (symbol, trade_date, side, price, quantity, price * quantity, reason)
+               (symbol, trade_date, side, price, quantity, amount, reason, account_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (symbol, trade_date, side, price, quantity, price * quantity, reason, account_type)
         )
         self.conn.commit()
 
-    def get_trades(self, symbol: Optional[str] = None) -> pd.DataFrame:
+    def get_trades(self, symbol: Optional[str] = None, account_type: str = "paper") -> pd.DataFrame:
         """获取交易记录"""
         if symbol:
-            query = "SELECT * FROM trades WHERE symbol = ? ORDER BY trade_date"
-            df = pd.read_sql_query(query, self.conn, params=[symbol])
+            query = "SELECT * FROM trades WHERE symbol = ? AND account_type = ? ORDER BY trade_date"
+            df = pd.read_sql_query(query, self.conn, params=[symbol, account_type])
         else:
-            query = "SELECT * FROM trades ORDER BY trade_date"
-            df = pd.read_sql_query(query, self.conn)
+            query = "SELECT * FROM trades WHERE account_type = ? ORDER BY trade_date"
+            df = pd.read_sql_query(query, self.conn, params=[account_type])
 
         return df
 
@@ -267,22 +315,56 @@ class SQLiteStorage:
         avg_cost: float,
         current_price: float,
         market_value: float,
-        unrealized_pnl: float
+        unrealized_pnl: float,
+        account_type: str = "paper"
     ):
         """保存/更新持仓"""
         self.conn.execute(
             """INSERT OR REPLACE INTO positions
-               (symbol, quantity, avg_cost, current_price, market_value, unrealized_pnl, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (symbol, quantity, avg_cost, current_price, market_value,
+               (symbol, account_type, quantity, avg_cost, current_price, market_value, unrealized_pnl, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (symbol, account_type, quantity, avg_cost, current_price, market_value,
              unrealized_pnl, datetime.now().isoformat())
         )
         self.conn.commit()
 
-    def get_positions(self) -> pd.DataFrame:
-        """获取所有持仓"""
-        query = "SELECT * FROM positions WHERE quantity > 0"
-        return pd.read_sql_query(query, self.conn)
+    def get_positions(self, account_type: str = "paper") -> pd.DataFrame:
+        """获取持仓"""
+        query = "SELECT * FROM positions WHERE quantity > 0 AND account_type = ?"
+        return pd.read_sql_query(query, self.conn, params=[account_type])
+
+    def delete_position(self, symbol: str, account_type: str = "paper"):
+        """删除持仓"""
+        self.conn.execute(
+            "DELETE FROM positions WHERE symbol = ? AND account_type = ?",
+            (symbol, account_type)
+        )
+        self.conn.commit()
+
+    def get_account_balance(self, account_type: str = "paper") -> dict:
+        """获取账户资金"""
+        cursor = self.conn.execute(
+            "SELECT cash, initial_capital FROM account_balance WHERE account_type = ?",
+            (account_type,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"cash": row[0], "initial_capital": row[1]}
+        return {"cash": 1000000.0, "initial_capital": 1000000.0}  # 默认初始资金
+
+    def update_account_balance(self, cash: float, account_type: str = "paper", initial_capital: float = None):
+        """更新账户资金"""
+        if initial_capital is None:
+            # 获取当前initial_capital
+            current = self.get_account_balance(account_type)
+            initial_capital = current.get("initial_capital", cash)
+
+        self.conn.execute(
+            """INSERT OR REPLACE INTO account_balance (account_type, cash, initial_capital, updated_at)
+               VALUES (?, ?, ?, ?)""",
+            (account_type, cash, initial_capital, datetime.now().isoformat())
+        )
+        self.conn.commit()
 
     def get_stats(self) -> dict:
         """获取数据库统计信息"""
