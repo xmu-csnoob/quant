@@ -36,3 +36,20 @@ loguru>=0.7.0
 
 # 并发处理
 tqdm>=4.65.0
+
+# 机器学习
+xgboost>=1.7.0
+
+# Web API
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pydantic>=2.0.0
+
+# API认证
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# 测试
+pytest>=7.0.0
+pytest-cov>=4.0.0
