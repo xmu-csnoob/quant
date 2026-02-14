@@ -75,12 +75,17 @@ class UserCreate(BaseModel):
 # ==================== 模拟用户数据库 ====================
 
 # 注意：生产环境应使用真实数据库
+# 以下为测试用模拟密码，格式: testpass_<role>
+_TEST_ADMIN_PASSWORD = "testpass_admin"
+_TEST_TRADER_PASSWORD = "testpass_trader"
+_TEST_VIEWER_PASSWORD = "testpass_viewer"
+
 fake_users_db: dict[str, UserInDB] = {
     "admin": UserInDB(
         username="admin",
         email="admin@example.com",
         full_name="系统管理员",
-        hashed_password=pwd_context.hash("admin123"),
+        hashed_password=pwd_context.hash(_TEST_ADMIN_PASSWORD),
         disabled=False,
         scopes=["read", "write", "admin"],
     ),
@@ -88,7 +93,7 @@ fake_users_db: dict[str, UserInDB] = {
         username="trader",
         email="trader@example.com",
         full_name="交易员",
-        hashed_password=pwd_context.hash("trader123"),
+        hashed_password=pwd_context.hash(_TEST_TRADER_PASSWORD),
         disabled=False,
         scopes=["read", "write"],
     ),
@@ -96,7 +101,7 @@ fake_users_db: dict[str, UserInDB] = {
         username="viewer",
         email="viewer@example.com",
         full_name="观察者",
-        hashed_password=pwd_context.hash("viewer123"),
+        hashed_password=pwd_context.hash(_TEST_VIEWER_PASSWORD),
         disabled=False,
         scopes=["read"],
     ),

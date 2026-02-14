@@ -38,12 +38,12 @@ def test_login():
     print("测试用户登录")
     print("=" * 60)
 
-    # 使用预设的admin账户
+    # 使用预设的admin账户（测试密码）
     response = client.post(
         "/auth/login",
         data={
             "username": "admin",
-            "password": "admin123",
+            "password": "testpass_admin",  # 测试用模拟密码
         }
     )
 
