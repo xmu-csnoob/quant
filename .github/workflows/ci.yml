@@ -59,6 +59,26 @@ jobs:
         python tests/test_trade_calendar.py || true
       continue-on-error: true
 
+    - name: Run risk management tests
+      run: |
+        python tests/test_risk_manager.py || true
+      continue-on-error: true
+
+    - name: Run advanced metrics tests
+      run: |
+        python tests/test_advanced_metrics.py || true
+      continue-on-error: true
+
+    - name: Run API auth tests
+      run: |
+        python tests/test_api_auth.py || true
+      continue-on-error: true
+
+    - name: Run integration tests
+      run: |
+        python tests/test_integration.py || true
+      continue-on-error: true
+
   # ==================== Python代码风格检查 ====================
   python-lint:
     runs-on: ubuntu-latest

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routers import account, trading, strategy, backtest, data, risk, ml
+from src.api.routers import account, trading, strategy, backtest, data, risk, ml, auth
 
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "*",  # 开发环境允许所有来源
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -45,6 +46,7 @@ app.add_middleware(
 )
 
 # 注册路由
+app.include_router(auth.router)  # 认证路由（无需认证）
 app.include_router(account.router)
 app.include_router(trading.router)
 app.include_router(strategy.router)
