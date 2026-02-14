@@ -125,6 +125,17 @@ export interface DataStatus {
   last_update: string;
   data_sources: string[];
   update_status: 'idle' | 'running' | 'error';
+  // 新增：数据日期范围
+  min_date?: string | null;
+  max_date?: string | null;
+  total_records?: number;
+}
+
+export interface DateRange {
+  min_date: string | null;
+  max_date: string | null;
+  total_records: number;
+  available: boolean;
 }
 
 export interface KlineData {
