@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel, EmailStr
 import os
 from loguru import logger
@@ -26,9 +26,6 @@ from loguru import logger
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24小时
-
-# 密码加密
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -80,44 +77,61 @@ _TEST_ADMIN_PASSWORD = "testpass_admin"
 _TEST_TRADER_PASSWORD = "testpass_trader"
 _TEST_VIEWER_PASSWORD = "testpass_viewer"
 
-fake_users_db: dict[str, UserInDB] = {
-    "admin": UserInDB(
-        username="admin",
-        email="admin@example.com",
-        full_name="系统管理员",
-        hashed_password=pwd_context.hash(_TEST_ADMIN_PASSWORD),
-        disabled=False,
-        scopes=["read", "write", "admin"],
-    ),
-    "trader": UserInDB(
-        username="trader",
-        email="trader@example.com",
-        full_name="交易员",
-        hashed_password=pwd_context.hash(_TEST_TRADER_PASSWORD),
-        disabled=False,
-        scopes=["read", "write"],
-    ),
-    "viewer": UserInDB(
-        username="viewer",
-        email="viewer@example.com",
-        full_name="观察者",
-        hashed_password=pwd_context.hash(_TEST_VIEWER_PASSWORD),
-        disabled=False,
-        scopes=["read"],
-    ),
+# 预计算的密码哈希（使用bcrypt直接生成）
+_FAKE_PASSWORD_HASHES = {
+    "admin": "$2b$12$rem8YcdQn4UTMwAElTu/B.rgqN4q6Lx3Z5C9QmJdPAvkWoIjXx2My",
+    "trader": "$2b$12$SnBPL8g.olN1apet2ql8WeEQJOz/bkA87f/e1IEJNljncuiNwmwNC",
+    "viewer": "$2b$12$7DR.T7GThq0m092eKBING.NhRQkdTivEHfTpykf0eulqaI0H5I15i",
 }
+
+fake_users_db: dict[str, UserInDB] = {}
+
+def _init_fake_users_db():
+    """延迟初始化模拟用户数据库"""
+    if fake_users_db:
+        return  # 已初始化
+
+    fake_users_db.update({
+        "admin": UserInDB(
+            username="admin",
+            email="admin@example.com",
+            full_name="系统管理员",
+            hashed_password=_FAKE_PASSWORD_HASHES["admin"],
+            disabled=False,
+            scopes=["read", "write", "admin"],
+        ),
+        "trader": UserInDB(
+            username="trader",
+            email="trader@example.com",
+            full_name="交易员",
+            hashed_password=_FAKE_PASSWORD_HASHES["trader"],
+            disabled=False,
+            scopes=["read", "write"],
+        ),
+        "viewer": UserInDB(
+            username="viewer",
+            email="viewer@example.com",
+            full_name="观察者",
+            hashed_password=_FAKE_PASSWORD_HASHES["viewer"],
+            disabled=False,
+            scopes=["read"],
+        ),
+    })
+
+# 模块加载时初始化
+_init_fake_users_db()
 
 
 # ==================== 密码工具 ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 def get_password_hash(password: str) -> str:
     """生成密码哈希"""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 # ==================== 用户工具 ====================

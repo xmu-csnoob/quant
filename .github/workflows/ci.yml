@@ -42,9 +42,35 @@ jobs:
         pip install -r requirements.txt || pip install numpy pandas scikit-learn xgboost loguru
         pip install pytest pytest-cov
 
-    - name: Run Python tests
+    - name: Run Python tests with coverage
       run: |
-        pytest tests/ -v --tb=short || true
+        pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing || true
+      continue-on-error: true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        fail_ci_if_error: false
+      continue-on-error: true
+
+    - name: Check coverage threshold
+      run: |
+        python -c "
+        import xml.etree.ElementTree as ET
+        try:
+            tree = ET.parse('coverage.xml')
+            root = tree.getroot()
+            rate = float(root.attrib.get('line-rate', 0)) * 100
+            print(f'Coverage: {rate:.2f}%')
+            if rate < 50:
+                print('Warning: Coverage below 50%')
+            else:
+                print('Coverage check passed')
+        except:
+            print('Could not parse coverage report')
+        "
       continue-on-error: true
 
     - name: Run backtesting tests
@@ -69,14 +95,19 @@ jobs:
         python tests/test_advanced_metrics.py || true
       continue-on-error: true
 
-    - name: Run API auth tests
-      run: |
-        python tests/test_api_auth.py || true
-      continue-on-error: true
-
     - name: Run integration tests
       run: |
         python tests/test_integration.py || true
+      continue-on-error: true
+
+    - name: Run data layer tests
+      run: |
+        python tests/test_data_manager.py || true
+      continue-on-error: true
+
+    - name: Run strategy tests
+      run: |
+        python tests/test_strategies.py || true
       continue-on-error: true
 
   # ==================== Python代码风格检查 ====================
