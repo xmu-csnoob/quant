@@ -73,7 +73,7 @@ const MLPredictionPage: React.FC = () => {
       setTopBuySignals(buySignals);
       setTopSellSignals(sellSignals);
       setFeatureImportance(features);
-    } catch {
+    } catch (error) {
       console.error('获取ML数据失败:', error);
     } finally {
       setLoading(false);

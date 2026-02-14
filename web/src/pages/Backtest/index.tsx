@@ -34,7 +34,7 @@ const Backtest: React.FC = () => {
       ]);
       setMlModelInfo(info);
       setFeatureImportance(features);
-    } catch {
+    } catch (error) {
       console.error('加载ML信息失败:', error);
     } finally {
       setMlLoading(false);
