@@ -27,7 +27,7 @@ class StrategyService:
     """策略服务"""
 
     def __init__(self):
-        # 系统内置的策略
+        # 系统内置的策略（只保留已实现的）
         self._strategies = [
             Strategy(
                 id="ma_macd_rsi",
@@ -55,24 +55,6 @@ class StrategyService:
                 return_rate=18.5,
                 win_rate=65.8,
                 trade_count=42
-            ),
-            Strategy(
-                id="ensemble",
-                name="集成策略",
-                description="多策略投票/加权组合策略",
-                status=StrategyStatus.STOPPED,
-                return_rate=14.2,
-                win_rate=61.0,
-                trade_count=55
-            ),
-            Strategy(
-                id="adaptive_dynamic",
-                name="自适应动态策略",
-                description="基于市场状态识别的自适应策略",
-                status=StrategyStatus.STOPPED,
-                return_rate=16.8,
-                win_rate=59.5,
-                trade_count=38
             ),
         ]
         self._signals: List[Signal] = []

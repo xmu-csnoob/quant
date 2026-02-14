@@ -91,13 +91,11 @@ const Backtest: React.FC = () => {
     }
   };
 
-  // 策略列表
+  // 策略列表（只保留已实现的）
   const strategies = [
     { value: 'ma_macd_rsi', label: 'MA+MACD+RSI趋势策略' },
     { value: 'mean_reversion', label: '均值回归策略' },
     { value: 'ml_strategy', label: '🤖 机器学习策略 (XGBoost)' },
-    { value: 'ensemble', label: '集成策略' },
-    { value: 'adaptive_dynamic', label: '自适应动态策略' },
   ];
 
   const runBacktest = async (values: any) => {
