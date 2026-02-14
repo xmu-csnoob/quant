@@ -12,8 +12,9 @@ from loguru import logger
 
 from src.trading.orders import OrderManager, Order, OrderSide, OrderType
 from src.trading.api import TradingAPI, MockTradingAPI
+from src.trading.price_limit import get_price_limit_checker
 from src.strategies.base import BaseStrategy, Signal
-from risk import RiskManager, PositionSizer
+from src.risk import RiskManager, PositionSizer
 
 
 class LiveTradingEngine:
@@ -50,8 +51,12 @@ class LiveTradingEngine:
         self.symbols = symbols
 
         self.order_manager = OrderManager()
+        self.price_limit_checker = get_price_limit_checker()
         self.is_running = False
         self.last_signal_time = {}  # 上次信号时间 {symbol: datetime}
+
+        # 前收盘价缓存 {symbol: prev_close}
+        self._prev_close_cache = {}
 
         logger.info(
             f"LiveTradingEngine initialized: "
@@ -113,13 +118,48 @@ class LiveTradingEngine:
             # if signal:
             #     self._process_signal(signal)
 
-    def process_signal(self, signal: Signal, current_price: float) -> Optional[Order]:
+    def _get_prev_close(self, symbol: str, current_price: float) -> float:
+        """
+        获取前收盘价
+
+        Args:
+            symbol: 股票代码
+            current_price: 当前价格（作为备选）
+
+        Returns:
+            前收盘价
+        """
+        # 尝试从缓存获取
+        if symbol in self._prev_close_cache:
+            return self._prev_close_cache[symbol]
+
+        # 尝试从API获取（如果API支持）
+        try:
+            if hasattr(self.api, 'get_prev_close'):
+                prev_close = self.api.get_prev_close(symbol)
+                if prev_close:
+                    self._prev_close_cache[symbol] = prev_close
+                    return prev_close
+        except Exception as e:
+            logger.warning(f"获取前收盘价失败: {e}")
+
+        # 备选：使用当前价格（不进行涨跌停检查）
+        logger.warning(f"无法获取 {symbol} 的前收盘价，跳过涨跌停检查")
+        return current_price
+
+    def process_signal(
+        self,
+        signal: Signal,
+        current_price: float,
+        prev_close: Optional[float] = None
+    ) -> Optional[Order]:
         """
         处理策略信号
 
         Args:
             signal: 交易信号
             current_price: 当前价格
+            prev_close: 前收盘价（可选，用于涨跌停检查）
 
         Returns:
             创建的订单（如果成功），None otherwise
@@ -129,9 +169,27 @@ class LiveTradingEngine:
         symbol = signal.date.split("_")[0] if "_" in signal.date else self.symbols[0]
         date_str = signal.date
 
+        # 获取前收盘价用于涨跌停检查
+        if prev_close is None:
+            prev_close = self._get_prev_close(symbol, current_price)
+
+        # 当前日期
+        check_date = datetime.now().strftime("%Y%m%d")
+
         # 1. 风控检查
         if signal.signal_type.value == "buy":
             from src.strategies.base import SignalType
+
+            # 涨跌停检查
+            can_buy, limit_reason = self.price_limit_checker.can_buy(
+                code=symbol,
+                price=current_price,
+                prev_close=prev_close,
+                check_date=check_date
+            )
+            if not can_buy:
+                logger.warning(f"  涨跌停检查拒绝: {limit_reason}")
+                return None
 
             # 检查是否允许开仓
             allowed, pos_size, reason = self.risk_manager.check_entry(
@@ -146,32 +204,59 @@ class LiveTradingEngine:
 
             logger.info(f"  风控通过: {pos_size.reason}")
 
+            # 调整价格到涨跌停范围内
+            order_price = self.price_limit_checker.adjust_price_to_limit(
+                code=symbol,
+                price=current_price * 1.01,  # 稍高于市价确保成交
+                prev_close=prev_close,
+                check_date=check_date
+            )
+
             # 2. 创建订单
             order = self.order_manager.create_order(
                 symbol=symbol,
                 side=OrderSide.BUY,
                 order_type=OrderType.LIMIT,
                 quantity=pos_size.shares,
-                price=current_price * 1.01,  # 稍高于市价确保成交
+                price=order_price,
                 reason=signal.reason,
             )
 
         elif signal.signal_type.value == "sell":
+            # 涨跌停检查
+            can_sell, limit_reason = self.price_limit_checker.can_sell(
+                code=symbol,
+                price=current_price,
+                prev_close=prev_close,
+                check_date=check_date
+            )
+            if not can_sell:
+                logger.warning(f"  涨跌停检查拒绝: {limit_reason}")
+                return None
+
             # 检查是否有持仓
             positions = self.api.get_positions()
-            has_position = any(p.symbol == symbol for p in positions)
+            position = next((p for p in positions if p.symbol == symbol), None)
 
-            if not has_position:
+            if not position:
                 logger.warning(f"  无持仓，无法卖出")
                 return None
+
+            # 调整价格到涨跌停范围内
+            order_price = self.price_limit_checker.adjust_price_to_limit(
+                code=symbol,
+                price=current_price * 0.99,  # 稍低于市价确保成交
+                prev_close=prev_close,
+                check_date=check_date
+            )
 
             # 创建卖单
             order = self.order_manager.create_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.LIMIT,
-                quantity=positions[0].available_quantity,  # 卖出全部
-                price=current_price * 0.99,  # 稍低于市价确保成交
+                quantity=position.available_quantity,  # 卖出全部可卖数量
+                price=order_price,
                 reason=signal.reason,
             )
 
@@ -187,13 +272,19 @@ class LiveTradingEngine:
             logger.error(f"  订单提交失败")
             return None
 
-    def check_risk_controls(self, symbol: str, current_price: float):
+    def check_risk_controls(
+        self,
+        symbol: str,
+        current_price: float,
+        prev_close: Optional[float] = None
+    ):
         """
         检查风控（止损止盈等）
 
         Args:
             symbol: 股票代码
             current_price: 当前价格
+            prev_close: 前收盘价（用于涨跌停检查）
         """
         risk_check = self.risk_manager.check_exit(symbol, current_price, datetime.now().strftime("%Y%m%d"))
 
@@ -205,7 +296,23 @@ class LiveTradingEngine:
             position = next((p for p in positions if p.symbol == symbol), None)
 
             if position:
-                # 创建平仓订单
+                # 获取前收盘价
+                if prev_close is None:
+                    prev_close = self._get_prev_close(symbol, current_price)
+
+                check_date = datetime.now().strftime("%Y%m%d")
+
+                # 检查跌停（风控卖出时仍需尝试，但记录警告）
+                can_sell, limit_reason = self.price_limit_checker.can_sell(
+                    code=symbol,
+                    price=current_price,
+                    prev_close=prev_close,
+                    check_date=check_date
+                )
+                if not can_sell:
+                    logger.warning(f"  ⚠️ 当前跌停状态: {limit_reason}，仍尝试卖出")
+
+                # 创建平仓订单（市价单）
                 order = self.order_manager.create_order(
                     symbol=symbol,
                     side=OrderSide.SELL,

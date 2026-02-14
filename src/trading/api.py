@@ -5,12 +5,16 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
+from decimal import Decimal
 from loguru import logger
 
 from src.trading.orders import Order, OrderType, OrderSide, OrderStatus
+
+if TYPE_CHECKING:
+    from src.backtesting.slippage import BaseSlippage
 
 
 @dataclass
@@ -153,15 +157,20 @@ class MockTradingAPI(TradingAPI):
     """
     模拟交易API
 
-    用于回测和模拟盘测试
+    用于回测和模拟盘测试，支持滑点模拟
     """
 
-    def __init__(self, initial_cash: float = 100000):
+    def __init__(
+        self,
+        initial_cash: float = 100000,
+        slippage_model: Optional["BaseSlippage"] = None,
+    ):
         """
         初始化
 
         Args:
             initial_cash: 初始资金
+            slippage_model: 滑点模型（可选）
         """
         self.initial_cash = initial_cash
         self.cash = initial_cash
@@ -169,6 +178,7 @@ class MockTradingAPI(TradingAPI):
         self.orders: dict[str, Order] = {}
         self.trades: list[Trade] = []
         self._connected = False
+        self.slippage_model = slippage_model
 
     def connect(self) -> bool:
         """连接"""
@@ -289,6 +299,7 @@ class MockTradingAPI(TradingAPI):
         order: Order,
         fill_price: float,
         fill_quantity: int,
+        current_time: Optional[time] = None,
     ):
         """
         模拟成交
@@ -297,14 +308,32 @@ class MockTradingAPI(TradingAPI):
             order: 订单
             fill_price: 成交价格
             fill_quantity: 成交数量
+            current_time: 当前时间（用于滑点计算）
         """
         if fill_quantity <= 0:
             return
 
+        # 应用滑点模型
+        actual_fill_price = fill_price
+        if self.slippage_model:
+            from src.backtesting.costs import TradeSide
+
+            trade_side = TradeSide.BUY if order.side == OrderSide.BUY else TradeSide.SELL
+            result = self.slippage_model.apply_slippage(
+                price=Decimal(str(fill_price)),
+                side=trade_side,
+                current_time=current_time,
+            )
+            actual_fill_price = float(result.adjusted_price)
+            logger.debug(
+                f"滑点调整: {fill_price:.3f} -> {actual_fill_price:.3f} "
+                f"(滑点: {float(result.slippage_rate)*100:.4f}%)"
+            )
+
         # 更新订单
         order.filled_quantity += fill_quantity
         order.avg_price = (
-            (order.avg_price * (order.filled_quantity - fill_quantity) + fill_price * fill_quantity)
+            (order.avg_price * (order.filled_quantity - fill_quantity) + actual_fill_price * fill_quantity)
             / order.filled_quantity
         )
 
@@ -315,8 +344,8 @@ class MockTradingAPI(TradingAPI):
 
         # 更新资金和持仓
         if order.side == OrderSide.BUY:
-            self.cash -= fill_price * fill_quantity
-            commission = fill_price * fill_quantity * 0.0003  # 万分之三手续费
+            self.cash -= actual_fill_price * fill_quantity
+            commission = actual_fill_price * fill_quantity * 0.0003  # 万分之三手续费
 
             if order.symbol not in self.positions:
                 self.positions[order.symbol] = {
@@ -329,11 +358,11 @@ class MockTradingAPI(TradingAPI):
             old_cost = self.positions[order.symbol]["avg_price"] * old_qty
             new_qty = old_qty + fill_quantity
             self.positions[order.symbol]["quantity"] = new_qty
-            self.positions[order.symbol]["avg_price"] = (old_cost + fill_price * fill_quantity) / new_qty
-            self.positions[order.symbol]["current_price"] = fill_price
+            self.positions[order.symbol]["avg_price"] = (old_cost + actual_fill_price * fill_quantity) / new_qty
+            self.positions[order.symbol]["current_price"] = actual_fill_price
 
         else:  # SELL
-            self.cash += fill_price * fill_quantity
+            self.cash += actual_fill_price * fill_quantity
 
             if order.symbol in self.positions:
                 self.positions[order.symbol]["quantity"] -= fill_quantity
@@ -347,13 +376,13 @@ class MockTradingAPI(TradingAPI):
             symbol=order.symbol,
             side=order.side,
             quantity=fill_quantity,
-            price=fill_price,
+            price=actual_fill_price,
             trade_time=datetime.now().strftime("%Y%m%d %H:%M:%S"),
-            commission=fill_price * fill_quantity * 0.0003,
+            commission=actual_fill_price * fill_quantity * 0.0003,
         )
         self.trades.append(trade)
 
         logger.info(
             f"模拟成交: {order.symbol}, {order.side.value}, "
-            f"数量={fill_quantity}, 价格={fill_price:.2f}"
+            f"数量={fill_quantity}, 价格={actual_fill_price:.2f}"
         )
