@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import pandas as pd
-from strategies import MaMacdRsiStrategy
+from src.strategies import MaMacdRsiStrategy
 from src.backtesting.simple_backtester import SimpleBacktester
 from src.data.fetchers.mock import MockDataFetcher
 from src.data.api.data_manager import DataManager

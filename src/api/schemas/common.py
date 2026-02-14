@@ -16,6 +16,10 @@ class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = Field(default=None, description="响应数据")
 
 
+# 别名（兼容不同命名风格）
+APIResponse = ApiResponse
+
+
 class PaginatedResponse(BaseModel, Generic[T]):
     """分页响应"""
     items: List[T] = Field(default_factory=list, description="数据列表")

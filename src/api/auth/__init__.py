@@ -16,6 +16,7 @@ from src.api.auth.auth import (
     # JWT工具
     create_access_token,
     decode_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     # 依赖
     get_current_user,
     get_current_user_required,
@@ -42,6 +43,7 @@ __all__ = [
     # JWT工具
     "create_access_token",
     "decode_token",
+    "ACCESS_TOKEN_EXPIRE_MINUTES",
     # 依赖
     "get_current_user",
     "get_current_user_required",
