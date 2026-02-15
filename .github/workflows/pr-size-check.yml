@@ -1,0 +1,103 @@
+name: PR Size Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-size:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        id: size-check
+        run: |
+          # 获取PR的变更行数
+          ADDED=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
+          DELETED=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          TOTAL=$((ADDED + DELETED))
+
+          echo "total_lines=$TOTAL" >> $GITHUB_OUTPUT
+          echo "added_lines=$ADDED" >> $GITHUB_OUTPUT
+          echo "deleted_lines=$DELETED" >> $GITHUB_OUTPUT
+
+          # 检查是否有豁免label
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
+
+          if echo "$LABELS" | grep -q "emergency-override"; then
+            echo "⚠️ 检测到 emergency-override label，跳过大小检查"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if echo "$LABELS" | grep -q "large-refactor"; then
+            echo "⚠️ 检测到 large-refactor label，跳过大小检查"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+          # 设置阈值（默认500行）
+          THRESHOLD=${{ vars.PR_SIZE_THRESHOLD || '500' }}
+
+          if [ $TOTAL -gt $THRESHOLD ]; then
+            echo "::error::PR过大 ($TOTAL 行 > $THRESHOLD 行)。请拆分为多个小PR以提高可审查性。"
+            echo "failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ PR大小合理 ($TOTAL 行 ≤ $THRESHOLD 行)"
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add size label
+        if: always()
+        run: |
+          TOTAL=${{ steps.size-check.outputs.total_lines }}
+
+          # 移除旧的大小标签
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label "size/small" --remove-label "size/medium" --remove-label "size/large" 2>/dev/null || true
+
+          # 添加新的大小标签
+          if [ $TOTAL -le 100 ]; then
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "size/small"
+          elif [ $TOTAL -le 500 ]; then
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "size/medium"
+          else
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "size/large"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on large PR
+        if: failure()
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "## ⚠️ PR Size Warning
+
+          This PR has **${{ steps.size-check.outputs.total_lines }} lines** of changes (+${{ steps.size-check.outputs.added_lines }}, -${{ steps.size-check.outputs.deleted_lines }}), which exceeds the recommended limit of 500 lines.
+
+          ### Why this matters
+          - Large PRs are harder to review effectively
+          - Higher risk of introducing bugs
+          - Difficult to understand the full impact
+
+          ### What you can do
+          1. **Split this PR** into multiple smaller PRs
+          2. If this is truly necessary, add the \`emergency-override\` label to bypass this check
+
+          ###豁免场景
+          - \`emergency-override\`: 紧急修复，需要立即合入
+          - \`large-refactor\`: 大规模重构，已提前规划
+          "
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
