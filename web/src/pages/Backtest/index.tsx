@@ -93,7 +93,7 @@ const Backtest: React.FC = () => {
 
   // 策略列表（聚焦ML策略）
   const strategies = [
-    { value: 'ml_strategy', label: '🤖 机器学习策略 (XGBoost)' },
+    { value: 'ml_strategy', label: '🤖 机器学习策略 (LSTM)' },
   ];
 
   const runBacktest = async (values: any) => {

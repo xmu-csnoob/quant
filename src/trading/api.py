@@ -157,13 +157,19 @@ class MockTradingAPI(TradingAPI):
     """
     模拟交易API
 
-    用于回测和模拟盘测试，支持滑点模拟
+    用于回测和模拟盘测试，支持滑点模拟和T+1规则
+
+    T+1规则说明：
+    - A股T+1规则：当日买入的股票，当日不可卖出，需次日才能卖出
+    - 本实现按"批次"追踪持仓，每笔买入记录买入日期
+    - 卖出时优先卖出可卖批次（非当日买入的）
     """
 
     def __init__(
         self,
         initial_cash: float = 100000,
         slippage_model: Optional["BaseSlippage"] = None,
+        enable_t1_rule: bool = True,
     ):
         """
         初始化
@@ -171,14 +177,27 @@ class MockTradingAPI(TradingAPI):
         Args:
             initial_cash: 初始资金
             slippage_model: 滑点模型（可选）
+            enable_t1_rule: 是否启用T+1规则（A股当日买入次日才能卖出）
         """
         self.initial_cash = initial_cash
         self.cash = initial_cash
+        # 持仓结构：{symbol: {"lots": [{"quantity": 100, "buy_date": "20240101", "price": 10.0}], "current_price": 10.5}}
         self.positions: dict[str, dict] = {}
         self.orders: dict[str, Order] = {}
         self.trades: list[Trade] = []
         self._connected = False
         self.slippage_model = slippage_model
+        self.enable_t1_rule = enable_t1_rule
+        self._current_date: Optional[str] = None  # 当前交易日期
+
+    def set_current_date(self, date_str: str):
+        """
+        设置当前交易日期（用于T+1检查）
+
+        Args:
+            date_str: 日期字符串 (YYYYMMDD 或 YYYY-MM-DD)
+        """
+        self._current_date = date_str.replace("-", "")[:8]
 
     def connect(self) -> bool:
         """连接"""
@@ -217,9 +236,13 @@ class MockTradingAPI(TradingAPI):
                 order.status = OrderStatus.REJECTED
                 return False
 
-            available = self.positions[order.symbol]["quantity"]
+            # 计算可卖数量（T+1规则）
+            available = self._get_available_quantity(order.symbol)
             if available < order.quantity:
-                logger.warning(f"持仓不足: 需要{order.quantity}, 可用{available}")
+                locked = self.positions[order.symbol]["quantity"] - available
+                logger.warning(
+                    f"可卖数量不足: 需要{order.quantity}, 可用{available}（锁定{locked}因T+1规则）"
+                )
                 order.status = OrderStatus.REJECTED
                 return False
 
@@ -253,18 +276,74 @@ class MockTradingAPI(TradingAPI):
         """查询所有订单"""
         return list(self.orders.values())
 
+    def _get_available_quantity(self, symbol: str) -> int:
+        """
+        获取可卖数量（考虑T+1规则，按批次计算）
+
+        Args:
+            symbol: 股票代码
+
+        Returns:
+            可卖数量（非当日买入的批次总和）
+        """
+        if symbol not in self.positions:
+            return 0
+
+        pos = self.positions[symbol]
+        lots = pos.get("lots", [])
+
+        if not self.enable_t1_rule:
+            # T+1禁用时，所有持仓都可卖
+            return sum(lot["quantity"] for lot in lots)
+
+        # 获取当前日期
+        current_date = self._current_date or datetime.now().strftime("%Y%m%d")
+
+        # 计算非当日买入的批次数量（可卖）
+        available = sum(
+            lot["quantity"]
+            for lot in lots
+            if lot.get("buy_date", "") != current_date
+        )
+
+        return available
+
+    def _get_total_quantity(self, symbol: str) -> int:
+        """获取总持仓数量"""
+        if symbol not in self.positions:
+            return 0
+        return sum(lot["quantity"] for lot in self.positions[symbol].get("lots", []))
+
+    def _get_avg_price(self, symbol: str) -> float:
+        """计算加权平均成本价"""
+        if symbol not in self.positions:
+            return 0
+        lots = self.positions[symbol].get("lots", [])
+        if not lots:
+            return 0
+        total_qty = sum(lot["quantity"] for lot in lots)
+        if total_qty == 0:
+            return 0
+        total_cost = sum(lot["quantity"] * lot["price"] for lot in lots)
+        return total_cost / total_qty
+
     def get_positions(self) -> List[Position]:
         """查询持仓"""
         result = []
         for symbol, pos in self.positions.items():
-            quantity = pos["quantity"]
-            avg_price = pos["avg_price"]
+            lots = pos.get("lots", [])
+            quantity = sum(lot["quantity"] for lot in lots)
+            if quantity <= 0:
+                continue
+
+            avg_price = self._get_avg_price(symbol)
             current_price = pos.get("current_price", avg_price)
+            available_quantity = self._get_available_quantity(symbol)
 
             result.append(Position(
                 symbol=symbol,
                 quantity=quantity,
-                available_quantity=quantity,  # 简化处理
+                available_quantity=available_quantity,
                 avg_price=avg_price,
                 current_price=current_price,
                 market_value=quantity * current_price,
@@ -276,10 +355,12 @@ class MockTradingAPI(TradingAPI):
     def get_account(self) -> Account:
         """查询账户"""
         # 计算持仓市值
-        market_value = sum(
-            pos["quantity"] * pos.get("current_price", pos["avg_price"])
-            for pos in self.positions.values()
-        )
+        market_value = 0
+        for pos in self.positions.values():
+            lots = pos.get("lots", [])
+            current_price = pos.get("current_price", 0)
+            total_qty = sum(lot["quantity"] for lot in lots)
+            market_value += total_qty * current_price
 
         return Account(
             account_id="mock_account",
@@ -347,26 +428,57 @@ class MockTradingAPI(TradingAPI):
             self.cash -= actual_fill_price * fill_quantity
             commission = actual_fill_price * fill_quantity * 0.0003  # 万分之三手续费
 
-            if order.symbol not in self.positions:
-                self.positions[order.symbol] = {
-                    "quantity": 0,
-                    "avg_price": 0,
-                }
+            # 获取当前交易日期
+            trade_date = self._current_date or datetime.now().strftime("%Y%m%d")
 
-            # 更新持仓成本
-            old_qty = self.positions[order.symbol]["quantity"]
-            old_cost = self.positions[order.symbol]["avg_price"] * old_qty
-            new_qty = old_qty + fill_quantity
-            self.positions[order.symbol]["quantity"] = new_qty
-            self.positions[order.symbol]["avg_price"] = (old_cost + actual_fill_price * fill_quantity) / new_qty
+            # 初始化持仓结构
+            if order.symbol not in self.positions:
+                self.positions[order.symbol] = {"lots": [], "current_price": actual_fill_price}
+
+            # 添加新的批次（用于T+1追踪）
+            self.positions[order.symbol]["lots"].append({
+                "quantity": fill_quantity,
+                "buy_date": trade_date,
+                "price": actual_fill_price,
+            })
             self.positions[order.symbol]["current_price"] = actual_fill_price
 
         else:  # SELL
             self.cash += actual_fill_price * fill_quantity
 
             if order.symbol in self.positions:
-                self.positions[order.symbol]["quantity"] -= fill_quantity
-                if self.positions[order.symbol]["quantity"] <= 0:
+                lots = self.positions[order.symbol].get("lots", [])
+                current_date = self._current_date or datetime.now().strftime("%Y%m%d")
+
+                # 按FIFO原则卖出（优先卖出非当日买入的批次）
+                remaining_to_sell = fill_quantity
+
+                # 先尝试卖出可卖的批次（非当日买入）
+                new_lots = []
+                for lot in lots:
+                    if remaining_to_sell <= 0:
+                        new_lots.append(lot)
+                        continue
+
+                    # 当日买入的批次跳过（不可卖）
+                    if self.enable_t1_rule and lot.get("buy_date", "") == current_date:
+                        new_lots.append(lot)
+                        continue
+
+                    # 卖出此批次
+                    if lot["quantity"] <= remaining_to_sell:
+                        remaining_to_sell -= lot["quantity"]
+                        # 批次全部卖出，不保留
+                    else:
+                        # 部分卖出
+                        lot["quantity"] -= remaining_to_sell
+                        remaining_to_sell = 0
+                        new_lots.append(lot)
+
+                self.positions[order.symbol]["lots"] = new_lots
+
+                # 如果没有持仓了，删除
+                if not new_lots:
                     del self.positions[order.symbol]
 
         # 记录成交

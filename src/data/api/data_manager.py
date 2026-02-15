@@ -2,6 +2,16 @@
 数据管理器 - 门面类
 
 提供统一的数据访问接口，整合获取、缓存、存储
+
+注意：系统中存在双数据源问题
+- DataManager（本模块）: 使用 CSV DataStorage（src.data.storage.storage）
+- API服务（src.api.services.*）: 使用 SQLiteStorage（src.data.storage.sqlite_storage）
+
+这可能导致：
+1. 数据不一致：回测使用CSV数据，API使用SQLite数据
+2. 数据同步困难：两个存储之间没有同步机制
+
+TODO: 统一数据源，建议全部迁移到SQLiteStorage，DataManager也使用SQLite
 """
 
 import os

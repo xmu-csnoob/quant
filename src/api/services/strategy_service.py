@@ -19,7 +19,7 @@ from src.api.schemas.strategy import (
 from src.backtesting.simple_backtester import SimpleBacktester
 from src.backtesting.costs import CostConfig
 from src.data.storage.sqlite_storage import SQLiteStorage
-from src.strategies.ml_strategy import MLStrategy
+from src.strategies.lstm_strategy import LSTMStrategy
 from src.utils.features.enhanced_features import EnhancedFeatureExtractor
 
 
@@ -32,7 +32,7 @@ class StrategyService:
             Strategy(
                 id="ml_strategy",
                 name="机器学习策略",
-                description="基于XGBoost的预测策略，通过历史数据训练模型预测股价涨跌",
+                description="基于PyTorch LSTM深度学习的预测策略，通过时序模型预测股价涨跌概率",
                 status=StrategyStatus.RUNNING,
                 return_rate=0,
                 win_rate=0,
@@ -63,53 +63,44 @@ class StrategyService:
     def get_strategy_instance(self, strategy_id: str):
         """获取策略实例（目前只支持ML策略）"""
         if strategy_id == "ml_strategy":
-            return self._create_ml_strategy()
+            return self._create_lstm_strategy()
 
         logger.warning(f"不支持的策略: {strategy_id}")
         return None
 
-    def _create_ml_strategy(self):
-        """创建ML策略实例"""
-        import json
-        import xgboost as xgb
+    def _create_lstm_strategy(self):
+        """创建LSTM策略实例"""
         from pathlib import Path
 
-        model_path = Path("models/xgboost_model.json")
-        feature_path = Path("models/feature_cols.json")
+        model_path = Path("models/lstm_best.pt")
 
         if not model_path.exists():
-            logger.warning("ML模型文件不存在，无法创建ML策略")
+            logger.warning("LSTM模型文件不存在，无法创建策略")
             return None
 
         try:
-            # 加载模型
-            model = xgb.Booster()
-            model.load_model(str(model_path))
-
-            # 加载特征列
-            feature_cols = None
-            if feature_path.exists():
-                with open(feature_path, 'r') as f:
-                    feature_cols = json.load(f)
-                logger.info(f"加载特征列: {len(feature_cols)} 个")
-
-            # 创建特征提取器
-            feature_extractor = EnhancedFeatureExtractor(prediction_period=5)
-
-            # 创建ML策略
-            strategy = MLStrategy(
-                model=model,
-                feature_extractor=feature_extractor,
-                threshold=0.02,  # 预测收益超过2%时买入
-                prediction_period=5,
-                feature_cols=feature_cols,
+            # 使用LSTMStrategy的load方法加载
+            strategy = LSTMStrategy.load(
+                model_path=str(model_path),
+                scaler_path="models/lstm_scaler.pkl",
+                feature_path="models/feature_cols.json",
+                info_path="models/model_info.json",
+                device="auto",
+                buy_threshold=0.60,
+                sell_threshold=0.40,
             )
 
-            logger.info("ML策略创建成功")
+            if strategy is None:
+                logger.error("LSTM策略加载失败")
+                return None
+
+            logger.info("LSTM策略创建成功")
             return strategy
 
         except Exception as e:
-            logger.error(f"创建ML策略失败: {e}")
+            logger.error(f"创建LSTM策略失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
 

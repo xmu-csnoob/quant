@@ -192,9 +192,16 @@ class SQLiteStorage:
 
         # 重命名列以匹配数据库
         column_map = {
-            'vol': 'vol',  # Tushare使用vol
-            'volume': 'vol',  # 兼容volume列名
+            'volume': 'vol',  # 兼容volume列名 -> vol
         }
+        df = df.rename(columns=column_map)
+
+        # 确保必要的列存在
+        required_cols = ['ts_code', 'trade_date', 'open', 'high', 'low', 'close',
+                         'pre_close', 'change', 'pct_chg', 'vol', 'amount']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None
 
         # 保存到数据库（使用INSERT OR IGNORE处理重复）
         try:
@@ -204,8 +211,7 @@ class SQLiteStorage:
                    (ts_code, trade_date, open, high, low, close, pre_close,
                     change, pct_chg, vol, amount)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                df[['ts_code', 'trade_date', 'open', 'high', 'low', 'close',
-                    'pre_close', 'change', 'pct_chg', 'vol', 'amount']].values.tolist()
+                df[required_cols].values.tolist()
             )
             self.conn.commit()
             logger.debug(f"Saved {cursor.rowcount} rows for {ts_code}")

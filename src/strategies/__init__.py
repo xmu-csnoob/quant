@@ -30,6 +30,7 @@ from .base import (
     Position,
 )
 from .ma_macd_rsi import MaMacdRsiStrategy
+from .lstm_strategy import LSTMStrategy
 
 __all__ = [
     # 枚举
@@ -44,4 +45,5 @@ __all__ = [
     "Position",
     # 具体策略
     "MaMacdRsiStrategy",
+    "LSTMStrategy",
 ]

@@ -69,6 +69,7 @@ class Signal:
         date: 信号日期
         signal_type: 信号类型
         price: 信号价格
+        symbol: 股票代码（可选，多标的交易时必须）
         reason: 信号原因（可选，用于调试）
         confidence: 信号置信度 (0-1)，可选
         quantity: 建议的交易数量（可选），如果不指定则由回测器计算
@@ -77,13 +78,15 @@ class Signal:
     date: str
     signal_type: SignalType
     price: float
+    symbol: Optional[str] = None
     reason: Optional[str] = None
     confidence: Optional[float] = None
     quantity: Optional[int] = None
 
     def __str__(self) -> str:
         conf_str = f", confidence={self.confidence:.2f}" if self.confidence else ""
-        return f"Signal({self.date}, {self.signal_type.value}, price={self.price:.2f}{conf_str}, reason={self.reason})"
+        symbol_str = f", symbol={self.symbol}" if self.symbol else ""
+        return f"Signal({self.date}{symbol_str}, {self.signal_type.value}, price={self.price:.2f}{conf_str}, reason={self.reason})"
 
 
 class PositionType(Enum):
@@ -97,7 +100,14 @@ class PositionType(Enum):
 @dataclass
 class Position:
     """
-    持仓信息
+    持仓信息（策略层）
+
+    注意：系统中存在多个Position定义：
+    - src.strategies.base.Position: 策略层，包含position_type等策略相关字段
+    - src.trading.api.Position: 交易API层，包含available_quantity等交易相关字段
+    - src.risk.manager.Position: 风控层，包含unrealized_pnl等风控相关字段
+
+    TODO: 统一Position模型，避免数据传递时的字段丢失或误解
 
     Attributes:
         entry_date: 建仓日期
