@@ -1,0 +1,123 @@
+name: PR Template Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  check-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required sections
+        id: template-check
+        run: |
+          # 获取PR body
+          BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body --jq '.body')
+
+          # 检查是否有豁免label
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
+
+          if echo "$LABELS" | grep -q "emergency-override"; then
+            echo "⚠️ 检测到 emergency-override label，跳过模板检查"
+            exit 0
+          fi
+
+          ERRORS=""
+
+          # 检查设计摘要
+          if echo "$BODY" | grep -q "## 设计摘要"; then
+            SECTION=$(echo "$BODY" | sed -n '/## 设计摘要/,/^## /p' | head -n -1 | tail -n +2)
+            # 检查是否有实际内容（不只是注释）
+            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            if [ -z "$CONTENT" ]; then
+              ERRORS="$ERRORS\n- ❌ 设计摘要: 未填写"
+            else
+              echo "✅ 设计摘要: 已填写"
+            fi
+          else
+            ERRORS="$ERRORS\n- ❌ 设计摘要: 缺少此section"
+          fi
+
+          # 检查调用链/数据流图
+          if echo "$BODY" | grep -q "## 调用链/数据流图"; then
+            SECTION=$(echo "$BODY" | sed -n '/## 调用链\/数据流图/,/^## /p' | head -n -1 | tail -n +2)
+            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            if [ -z "$CONTENT" ]; then
+              ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 未填写"
+            else
+              echo "✅ 调用链/数据流图: 已填写"
+            fi
+          else
+            ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 缺少此section"
+          fi
+
+          # 检查不变量与边界
+          if echo "$BODY" | grep -q "## 不变量与边界"; then
+            SECTION=$(echo "$BODY" | sed -n '/## 不变量与边界/,/^## /p' | head -n -1 | tail -n +2)
+            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            if [ -z "$CONTENT" ]; then
+              ERRORS="$ERRORS\n- ❌ 不变量与边界: 未填写"
+            else
+              echo "✅ 不变量与边界: 已填写"
+            fi
+          else
+            ERRORS="$ERRORS\n- ❌ 不变量与边界: 缺少此section"
+          fi
+
+          # 检查复现脚本
+          if echo "$BODY" | grep -q "## 复现脚本"; then
+            SECTION=$(echo "$BODY" | sed -n '/## 复现脚本/,/^## /p' | head -n -1 | tail -n +2)
+            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            if [ -z "$CONTENT" ]; then
+              ERRORS="$ERRORS\n- ❌ 复现脚本: 未填写"
+            else
+              echo "✅ 复现脚本: 已填写"
+            fi
+          else
+            ERRORS="$ERRORS\n- ❌ 复现脚本: 缺少此section"
+          fi
+
+          # 如果有错误，输出并失败
+          if [ -n "$ERRORS" ]; then
+            echo ""
+            echo "::error::PR模板检查失败，以下必填section未完成："
+            echo -e "$ERRORS"
+            echo ""
+            echo "ERRORS<<EOF" >> $GITHUB_ENV
+            echo -e "$ERRORS" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ 所有必填section已填写"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on incomplete template
+        if: failure()
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "## ⚠️ PR Template Check Failed
+
+          以下必填section未完成：
+
+          ${{ env.ERRORS }}
+
+          ### 必填section说明
+          1. **设计摘要**: 描述变更的目标、输入输出、依赖、失败模式、回滚方案
+          2. **调用链/数据流图**: 描述请求如何流经各模块
+          3. **不变量与边界**: 列出必须为真的条件和边界限制
+          4. **复现脚本**: 提供可运行的验证命令
+
+          ### 为什么需要这些
+          - 帮助reviewer快速理解变更意图
+          - 确保关键决策被记录
+          - 便于后续维护和问题定位
+
+          请完善PR描述后重新提交。
+          "
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
