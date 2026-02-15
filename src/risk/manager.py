@@ -43,6 +43,7 @@ class Position:
     current_price: float = 0
     unrealized_pnl: float = 0
     unrealized_pnl_ratio: float = 0
+    peak_pnl_ratio: float = 0  # 峰值盈亏比例，用于移动止损
 
 
 class RiskManager:
@@ -223,15 +224,20 @@ class RiskManager:
                 total_pnl=position.unrealized_pnl,
             )
 
-        # 5. 检查移动止损（回撤50%平仓）
-        if position.unrealized_pnl_ratio > 0.05:
-            # 盈利超过5%，设置移动止损
-            trailing_stop = position.unrealized_pnl_ratio * 0.5
+        # 5. 检查移动止损（从峰值回撤50%平仓）
+        # 更新峰值盈亏比例
+        if position.unrealized_pnl_ratio > position.peak_pnl_ratio:
+            position.peak_pnl_ratio = position.unrealized_pnl_ratio
+
+        # 只有当曾经盈利超过5%时才启用移动止损
+        if position.peak_pnl_ratio > 0.05:
+            # 移动止损线：峰值的50%（即回撤50%利润时平仓）
+            trailing_stop = position.peak_pnl_ratio * 0.5
             if position.unrealized_pnl_ratio < trailing_stop:
                 return RiskCheck(
                     passed=False,
                     action=RiskAction.CLOSE,
-                    reason=f"触发移动止损（盈利回撤从{position.unrealized_pnl_ratio:.1%}到{trailing_stop:.1%}）",
+                    reason=f"触发移动止损（盈利从峰值{position.peak_pnl_ratio:.1%}回撤至{position.unrealized_pnl_ratio:.1%}，低于止损线{trailing_stop:.1%}）",
                     current_position_ratio=position.shares * current_price / self.initial_capital,
                     current_drawdown=(self.peak_capital - self.current_capital) / self.peak_capital,
                     total_pnl=position.unrealized_pnl,

@@ -61,10 +61,15 @@ pip install -r requirements.txt
 
 ```python
 from src.backtesting.simple_backtester import SimpleBacktester
-from src.strategies.trend_following import MaMacdRsiStrategy
+from src.strategies.ma_macd_rsi import MaMacdRsiStrategy
+from src.data.storage.sqlite_storage import SQLiteStorage
 
 # 加载策略
 strategy = MaMacdRsiStrategy()
+
+# 获取数据
+storage = SQLiteStorage()
+data = storage.get_daily_prices("600519.SH", "20230101", "20241231")
 
 # 运行回测
 backtester = SimpleBacktester(initial_capital=1000000)

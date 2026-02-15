@@ -166,7 +166,14 @@ class LiveTradingEngine:
         """
         logger.info(f"\n处理信号: {signal}")
 
-        symbol = signal.date.split("_")[0] if "_" in signal.date else self.symbols[0]
+        # 优先使用signal中的symbol字段，否则回退到第一个交易标的
+        if hasattr(signal, 'symbol') and signal.symbol:
+            symbol = signal.symbol
+        else:
+            # 警告：多标的交易时应在Signal中指定symbol
+            if len(self.symbols) > 1:
+                logger.warning("Signal未指定symbol，多标的交易可能下单错误标的")
+            symbol = self.symbols[0]
         date_str = signal.date
 
         # 获取前收盘价用于涨跌停检查

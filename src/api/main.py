@@ -31,15 +31,28 @@ app = FastAPI(
 )
 
 # 配置CORS - 允许前端跨域访问
+# 注意：当 allow_credentials=True 时，不能使用 "*" 作为 allow_origins
+import os
+
+# 根据环境决定CORS配置
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Vite开发服务器
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# 生产环境可以从环境变量读取额外的允许来源
+if os.getenv("PRODUCTION"):
+    extra_origins = os.getenv("CORS_ORIGINS", "")
+    if extra_origins:
+        ALLOWED_ORIGINS.extend(extra_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite开发服务器
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "*",  # 开发环境允许所有来源
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

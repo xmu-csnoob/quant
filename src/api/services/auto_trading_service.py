@@ -6,7 +6,7 @@ T+1盯盘交易：
 2. 生成次日交易信号
 3. 次日开盘执行交易
 
-由于只有日线数据，交易决策基于前一日收盘数据
+使用LSTM深度学习策略进行预测
 """
 
 from datetime import datetime, date
@@ -25,15 +25,15 @@ class AutoTradingService:
         self._storage = SQLiteStorage()
         self._trading_service = TradingService(account_type)
         self._account_type = account_type
-        self._ml_strategy = None  # 延迟加载
+        self._lstm_strategy = None  # 延迟加载LSTM策略
 
-    def _get_ml_strategy(self):
-        """延迟加载ML策略"""
-        if self._ml_strategy is None:
+    def _get_lstm_strategy(self):
+        """延迟加载LSTM策略"""
+        if self._lstm_strategy is None:
             from src.api.services.strategy_service import StrategyService
             strategy_service = StrategyService()
-            self._ml_strategy = strategy_service.get_strategy_instance("ml_strategy")
-        return self._ml_strategy
+            self._lstm_strategy = strategy_service.get_strategy_instance("ml_strategy")
+        return self._lstm_strategy
 
     def set_strategy(self, strategy_id: str) -> bool:
         """设置使用的策略（目前只支持ml_strategy）"""
@@ -74,9 +74,9 @@ class AutoTradingService:
             "errors": [],
         }
 
-        strategy = self._get_ml_strategy()
+        strategy = self._get_lstm_strategy()
         if not strategy:
-            result["errors"].append("ML策略加载失败")
+            result["errors"].append("LSTM策略加载失败")
             return result
 
         # 1. 获取当前持仓

@@ -40,6 +40,9 @@ tqdm>=4.65.0
 # 机器学习
 xgboost>=1.7.0
 
+# 深度学习
+torch>=2.0.0
+
 # Web API
 fastapi>=0.100.0
 uvicorn>=0.22.0

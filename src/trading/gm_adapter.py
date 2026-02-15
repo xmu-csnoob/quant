@@ -269,7 +269,7 @@ class GMLiveTradingEngine(LiveTradingEngine):
 
         # 如果没有提供风险管理器，创建一个
         if risk_manager is None:
-            from risk import RiskManager, PositionSizer
+            from src.risk import RiskManager, PositionSizer
             position_sizer = PositionSizer(initial_capital=100000)
             risk_manager = RiskManager(
                 initial_capital=100000,
