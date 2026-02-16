@@ -34,8 +34,8 @@ jobs:
           # 检查设计摘要
           if echo "$BODY" | grep -q "## 设计摘要"; then
             SECTION=$(echo "$BODY" | sed -n '/## 设计摘要/,/^## /p' | head -n -1 | tail -n +2)
-            # 检查是否有实际内容（不只是注释）
-            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            # 检查是否有实际内容（移除HTML注释后）
+            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
             if [ -z "$CONTENT" ]; then
               ERRORS="$ERRORS\n- ❌ 设计摘要: 未填写"
             else
@@ -48,7 +48,7 @@ jobs:
           # 检查调用链/数据流图
           if echo "$BODY" | grep -q "## 调用链/数据流图"; then
             SECTION=$(echo "$BODY" | sed -n '/## 调用链\/数据流图/,/^## /p' | head -n -1 | tail -n +2)
-            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
             if [ -z "$CONTENT" ]; then
               ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 未填写"
             else
@@ -61,7 +61,7 @@ jobs:
           # 检查不变量与边界
           if echo "$BODY" | grep -q "## 不变量与边界"; then
             SECTION=$(echo "$BODY" | sed -n '/## 不变量与边界/,/^## /p' | head -n -1 | tail -n +2)
-            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
             if [ -z "$CONTENT" ]; then
               ERRORS="$ERRORS\n- ❌ 不变量与边界: 未填写"
             else
@@ -74,7 +74,7 @@ jobs:
           # 检查复现脚本
           if echo "$BODY" | grep -q "## 复现脚本"; then
             SECTION=$(echo "$BODY" | sed -n '/## 复现脚本/,/^## /p' | head -n -1 | tail -n +2)
-            CONTENT=$(echo "$SECTION" | grep -v '<!--' | grep -v '-->' | tr -d '\n' | tr -d ' ')
+            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
             if [ -z "$CONTENT" ]; then
               ERRORS="$ERRORS\n- ❌ 复现脚本: 未填写"
             else
