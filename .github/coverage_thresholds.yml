@@ -1,0 +1,71 @@
+# 覆盖率阈值配置
+#
+# 定义不同模块的最低覆盖率要求
+
+# 全局覆盖率阈值
+global:
+  minimum: 40
+  target: 60
+  description: "全局代码覆盖率，当前40%，目标60%"
+
+# 按模块定义覆盖率阈值
+modules:
+  # 策略模块 - 核心交易逻辑
+  strategies:
+    minimum: 60
+    target: 75
+    priority: high
+    description: "交易策略实现，包括信号生成和策略组合"
+
+  # 风险管理模块 - 关键安全逻辑
+  risk:
+    minimum: 70
+    target: 85
+    priority: critical
+    description: "风险管理和仓位控制，需要更高的测试覆盖率"
+
+  # 交易执行模块
+  trading:
+    minimum: 60
+    target: 75
+    priority: high
+    description: "交易执行和订单管理"
+
+  # 数据层
+  data:
+    minimum: 50
+    target: 65
+    priority: medium
+    description: "数据获取、存储和管理"
+
+  # 回测引擎
+  backtesting:
+    minimum: 55
+    target: 70
+    priority: medium
+    description: "回测引擎和性能评估"
+
+  # 工具模块
+  utils:
+    minimum: 50
+    target: 65
+    priority: low
+    description: "工具函数和辅助模块"
+
+# 新增代码覆盖率要求
+new_code:
+  minimum: 70
+  description: "PR中新增代码的最低覆盖率要求"
+
+# 覆盖率下降容忍度
+tolerance:
+  max_drop: 5
+  description: "相比base分支，覆盖率下降的最大容忍百分比"
+
+# 特殊规则
+rules:
+  # 测试文件本身不计入覆盖率
+  exclude:
+    - "*/tests/*"
+    - "*/test_*.py"
+    - "*_test.py"
