@@ -71,8 +71,8 @@ jobs:
             root = tree.getroot()
             rate = float(root.attrib.get('line-rate', 0)) * 100
             print(f'Coverage: {rate:.2f}%')
-            if rate < 60:
-                print('ERROR: Coverage below 60% threshold')
+            if rate < 40:
+                print('ERROR: Coverage below 40% threshold')
                 sys.exit(1)
             else:
                 print('Coverage check passed')

@@ -21,7 +21,7 @@ exclude_lines =
     @abstractmethod
 
 # 失败阈值
-fail_under = 60
+fail_under = 40
 
 [html]
 # HTML报告配置

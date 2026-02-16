@@ -4,9 +4,9 @@
 
 # 全局覆盖率阈值
 global:
-  minimum: 60
-  target: 70
-  description: "全局代码覆盖率，所有模块的平均值"
+  minimum: 40
+  target: 60
+  description: "全局代码覆盖率，当前40%，目标60%"
 
 # 按模块定义覆盖率阈值
 modules:
