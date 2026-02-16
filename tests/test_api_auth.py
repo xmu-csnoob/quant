@@ -4,6 +4,7 @@ API认证测试
 测试JWT认证、用户登录注册等功能
 """
 
+import pytest
 import sys
 from pathlib import Path
 

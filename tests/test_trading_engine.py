@@ -4,6 +4,7 @@
 测试订单管理、MockTradingAPI、T+1规则等功能
 """
 
+import pytest
 import sys
 from pathlib import Path
 
