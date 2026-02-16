@@ -69,59 +69,6 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
 
 
-# ==================== 模拟用户数据库 ====================
-
-# 注意：生产环境应使用真实数据库
-# 以下为测试用模拟密码，格式: testpass_<role>
-_TEST_ADMIN_PASSWORD = "testpass_admin"
-_TEST_TRADER_PASSWORD = "testpass_trader"
-_TEST_VIEWER_PASSWORD = "testpass_viewer"
-
-# 预计算的密码哈希（使用bcrypt直接生成）
-_FAKE_PASSWORD_HASHES = {
-    "admin": "$2b$12$rem8YcdQn4UTMwAElTu/B.rgqN4q6Lx3Z5C9QmJdPAvkWoIjXx2My",
-    "trader": "$2b$12$SnBPL8g.olN1apet2ql8WeEQJOz/bkA87f/e1IEJNljncuiNwmwNC",
-    "viewer": "$2b$12$7DR.T7GThq0m092eKBING.NhRQkdTivEHfTpykf0eulqaI0H5I15i",
-}
-
-fake_users_db: dict[str, UserInDB] = {}
-
-def _init_fake_users_db():
-    """延迟初始化模拟用户数据库"""
-    if fake_users_db:
-        return  # 已初始化
-
-    fake_users_db.update({
-        "admin": UserInDB(
-            username="admin",
-            email="admin@example.com",
-            full_name="系统管理员",
-            hashed_password=_FAKE_PASSWORD_HASHES["admin"],
-            disabled=False,
-            scopes=["read", "write", "admin"],
-        ),
-        "trader": UserInDB(
-            username="trader",
-            email="trader@example.com",
-            full_name="交易员",
-            hashed_password=_FAKE_PASSWORD_HASHES["trader"],
-            disabled=False,
-            scopes=["read", "write"],
-        ),
-        "viewer": UserInDB(
-            username="viewer",
-            email="viewer@example.com",
-            full_name="观察者",
-            hashed_password=_FAKE_PASSWORD_HASHES["viewer"],
-            disabled=False,
-            scopes=["read"],
-        ),
-    })
-
-# 模块加载时初始化
-_init_fake_users_db()
-
-
 # ==================== 密码工具 ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -134,13 +81,63 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
+# ==================== 模拟用户数据库 ====================
+
+# 注意：生产环境应使用真实数据库
+# 以下为测试用模拟密码，格式: testpass_<role>
+_TEST_ADMIN_PASSWORD = "testpass_admin"
+_TEST_TRADER_PASSWORD = "testpass_trader"
+_TEST_VIEWER_PASSWORD = "testpass_viewer"
+
+fake_users_db: dict[str, UserInDB] = {}
+
+def _init_fake_users_db():
+    """延迟初始化模拟用户数据库"""
+    if fake_users_db:
+        return  # 已初始化
+
+    # 在初始化时动态生成密码哈希
+    fake_users_db.update({
+        "admin": UserInDB(
+            username="admin",
+            email="admin@example.com",
+            full_name="系统管理员",
+            hashed_password=get_password_hash(_TEST_ADMIN_PASSWORD),
+            disabled=False,
+            scopes=["read", "write", "admin"],
+        ),
+        "trader": UserInDB(
+            username="trader",
+            email="trader@example.com",
+            full_name="交易员",
+            hashed_password=get_password_hash(_TEST_TRADER_PASSWORD),
+            disabled=False,
+            scopes=["read", "write"],
+        ),
+        "viewer": UserInDB(
+            username="viewer",
+            email="viewer@example.com",
+            full_name="观察者",
+            hashed_password=get_password_hash(_TEST_VIEWER_PASSWORD),
+            disabled=False,
+            scopes=["read"],
+        ),
+    })
+
+# 模块加载时初始化
+_init_fake_users_db()
+
+
 # ==================== 用户工具 ====================
 
 def get_user(db: dict, username: str) -> Optional[UserInDB]:
     """获取用户"""
     if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
+        user = db[username]
+        # 支持UserInDB对象或字典
+        if isinstance(user, UserInDB):
+            return user
+        return UserInDB(**user)
     return None
 
 
