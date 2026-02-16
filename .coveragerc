@@ -1,0 +1,33 @@
+[run]
+# 覆盖率运行配置
+source = src
+branch = True
+data_file = .coverage
+
+[report]
+# 覆盖率报告配置
+precision = 2
+show_missing = True
+skip_covered = False
+
+# 排除规则
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+
+# 失败阈值
+fail_under = 60
+
+[html]
+# HTML报告配置
+directory = htmlcov
+title = Quant Trading System - Coverage Report
+
+[xml]
+# XML报告配置
+output = coverage.xml
