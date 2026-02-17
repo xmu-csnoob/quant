@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from decimal import Decimal
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from src.trading.orders import OrderManager, Order, OrderType, OrderStatus, OrderSide
 from src.trading.api import MockTradingAPI
 from src.trading.t1_manager import T1Manager
@@ -40,7 +40,6 @@ class TestOrderManager:
         assert order.status == OrderStatus.PENDING
         print(f"  ✅ 订单创建成功: {order.order_id}")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_submit_order(self):
         """测试提交订单"""
         print("\n测试提交订单")
@@ -54,12 +53,12 @@ class TestOrderManager:
             price=10.50,
         )
 
-        success = manager.submit_order(order.order_id)
+        # submit_order expects Order object, not order_id
+        success = manager.submit_order(order)
         assert success is True
         assert order.status == OrderStatus.SUBMITTED
         print(f"  ✅ 订单提交成功: {order.order_id}")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_cancel_order(self):
         """测试取消订单"""
         print("\n测试取消订单")
@@ -73,20 +72,20 @@ class TestOrderManager:
             price=10.50,
         )
 
-        manager.submit_order(order.order_id)
+        manager.submit_order(order)
         success = manager.cancel_order(order.order_id)
 
         assert success is True
         assert order.status == OrderStatus.CANCELLED
         print(f"  ✅ 订单取消成功: {order.order_id}")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_get_active_orders(self):
         """测试获取活动订单"""
         print("\n测试获取活动订单")
         manager = OrderManager()
 
         # 创建多个订单
+        created_orders = []
         for i in range(3):
             order = manager.create_order(
                 symbol=f"60000{i}.SH",
@@ -95,10 +94,11 @@ class TestOrderManager:
                 quantity=100,
                 price=10.00,
             )
-            manager.submit_order(order.order_id)
+            manager.submit_order(order)
+            created_orders.append(order)
 
-        # 取消一个
-        manager.cancel_order(manager.orders[0].order_id)
+        # 取消第一个
+        manager.cancel_order(created_orders[0].order_id)
 
         active_orders = manager.get_active_orders()
         assert len(active_orders) == 2
@@ -120,60 +120,91 @@ class TestMockTradingAPI:
         assert account.cash == 1000000
         print(f"  ✅ 账户总资产: {account.total_assets}")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_buy_stock(self):
         """测试买入股票"""
         print("\n测试买入股票")
         api = MockTradingAPI(initial_cash=1000000)
+        api.connect()
 
-        # 设置当前价格
-        api.set_current_price("600000.SH", 10.50)
-
-        order = api.buy(
-            code="600000.SH",
-            price=Decimal("10.50"),
+        # 创建买入订单
+        order = Order(
+            order_id="TEST001",
+            symbol="600000.SH",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
             quantity=1000,
+            price=10.50,
         )
 
-        assert order is not None
-        assert order.side.name == "BUY"
+        # 下单
+        success = api.place_order(order)
+        assert success is True
+        assert order.status == OrderStatus.SUBMITTED
+
+        # 模拟成交
+        api.simulate_fill(order, fill_price=10.50, fill_quantity=1000)
+        assert order.status == OrderStatus.FILLED
+
         print(f"  ✅ 买入订单: {order.order_id}")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_sell_stock(self):
         """测试卖出股票"""
         print("\n测试卖出股票")
         api = MockTradingAPI(initial_cash=1000000)
+        api.connect()
 
         # 先买入
-        api.set_current_price("600000.SH", 10.50)
-        api.buy(code="600000.SH", price=Decimal("10.50"), quantity=1000)
-
-        # 模拟T+1（设置持仓日期为昨天）
-        positions = api.get_positions()
-        for pos in positions:
-            # Position对象有属性，不是字典
-            pass  # T+1由API内部处理
-
-        # 卖出（需要先处理T+1，这里可能失败）
-        order = api.sell(
-            code="600000.SH",
-            price=Decimal("11.00"),
+        buy_order = Order(
+            order_id="BUY001",
+            symbol="600000.SH",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
             quantity=1000,
+            price=10.50,
         )
+        api.place_order(buy_order)
+        api.simulate_fill(buy_order, fill_price=10.50, fill_quantity=1000)
 
-        # 如果T+1限制，order可能为None
-        print(f"  ✅ 卖出订单: {order.order_id if order else 'None (T+1限制)'}")
+        # 设置为昨天买入（T+1可卖）
+        api.set_current_date((date.today() - timedelta(days=1)).strftime("%Y%m%d"))
+        # 更新持仓日期
+        if "600000.SH" in api.positions:
+            for lot in api.positions["600000.SH"]["lots"]:
+                lot["buy_date"] = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
 
-    @pytest.mark.skip(reason="待后续PR修复")
+        # 设置今天日期
+        api.set_current_date(date.today().strftime("%Y%m%d"))
+
+        # 卖出
+        sell_order = Order(
+            order_id="SELL001",
+            symbol="600000.SH",
+            side=OrderSide.SELL,
+            order_type=OrderType.LIMIT,
+            quantity=1000,
+            price=11.00,
+        )
+        success = api.place_order(sell_order)
+
+        print(f"  ✅ 卖出订单: {sell_order.order_id if success else 'None (T+1限制)'}")
+
     def test_get_positions(self):
         """测试获取持仓"""
         print("\n测试获取持仓")
         api = MockTradingAPI(initial_cash=1000000)
+        api.connect()
 
         # 买入
-        api.set_current_price("600000.SH", 10.50)
-        api.buy(code="600000.SH", price=Decimal("10.50"), quantity=1000)
+        buy_order = Order(
+            order_id="BUY001",
+            symbol="600000.SH",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            quantity=1000,
+            price=10.50,
+        )
+        api.place_order(buy_order)
+        api.simulate_fill(buy_order, fill_price=10.50, fill_quantity=1000)
 
         positions = api.get_positions()
 
@@ -185,7 +216,6 @@ class TestMockTradingAPI:
 class TestT1Manager:
     """T+1管理测试"""
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_can_sell_today(self):
         """测试当天买入能否卖出"""
         print("\n测试T+1规则")
@@ -197,26 +227,28 @@ class TestT1Manager:
         # 今天买入 (code, shares, buy_date, price)
         manager.record_buy(code, 1000, today, 10.0)
 
-        # 今天不能卖
-        can_sell = manager.can_sell(code, today)
+        # 今天不能卖 (can_sell需要shares参数)
+        can_sell = manager.can_sell(code, 1000, today)
         assert can_sell is False
         print("  ✅ 当天买入不能卖出")
 
-    @pytest.mark.skip(reason="待后续PR修复")
     def test_can_sell_next_day(self):
         """测试次日能否卖出"""
         print("\n测试次日能否卖出")
         manager = T1Manager()
 
         today = date.today()
-        tomorrow = date(today.year, today.month, today.day + 1)
+        # 计算下一个交易日（跳过周末）
+        tomorrow = today + timedelta(days=1)
+        while tomorrow.weekday() >= 5:  # 5=Saturday, 6=Sunday
+            tomorrow += timedelta(days=1)
         code = "600000.SH"
 
         # 今天买入
         manager.record_buy(code, 1000, today, 10.0)
 
-        # 明天可以卖
-        can_sell = manager.can_sell(code, tomorrow)
+        # 明天可以卖 (can_sell需要shares参数)
+        can_sell = manager.can_sell(code, 1000, tomorrow)
         assert can_sell is True
         print("  ✅ 次日可以卖出")
 

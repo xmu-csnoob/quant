@@ -69,7 +69,7 @@ async def register(user_data: UserCreate):
             full_name=user_data.full_name,
         )
         return APIResponse(
-            success=True,
+            code=200,
             message="注册成功",
             data={"username": user.username}
         )

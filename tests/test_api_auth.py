@@ -33,8 +33,6 @@ def test_health_check():
     print("  ✅ 健康检查测试通过")
 
 
-@pytest.mark.skip(reason="待修复: UserInDB类型错误")
-@pytest.mark.skip(reason="待后续PR修复")
 def test_login():
     """测试用户登录"""
     print("\n" + "=" * 60)
@@ -63,7 +61,6 @@ def test_login():
     return data["access_token"]
 
 
-@pytest.mark.skip(reason="待后续PR修复")
 def test_login_invalid():
     """测试登录失败"""
     print("\n" + "=" * 60)
@@ -84,7 +81,6 @@ def test_login_invalid():
     print("  ✅ 错误密码测试通过")
 
 
-@pytest.mark.skip(reason="待后续PR修复")
 def test_get_current_user():
     """测试获取当前用户"""
     print("\n" + "=" * 60)
@@ -125,7 +121,6 @@ def test_get_current_user_no_token():
     print("  ✅ 无token访问测试通过")
 
 
-@pytest.mark.skip(reason="待后续PR修复")
 def test_verify_token():
     """测试token验证"""
     print("\n" + "=" * 60)
@@ -152,7 +147,6 @@ def test_verify_token():
     print("  ✅ Token验证测试通过")
 
 
-@pytest.mark.skip(reason="待后续PR修复")
 def test_register():
     """测试用户注册"""
     print("\n" + "=" * 60)
@@ -174,11 +168,11 @@ def test_register():
 
     print(f"  状态码: {response.status_code}")
     data = response.json()
-    print(f"  success: {data.get('success')}")
+    print(f"  code: {data.get('code')}")
     print(f"  message: {data.get('message')}")
 
     assert response.status_code == 200
-    assert data["success"] is True
+    assert data["code"] == 200
 
     # 尝试用新用户登录
     login_response = client.post(
@@ -195,7 +189,6 @@ def test_register():
     print("  ✅ 用户注册测试通过")
 
 
-@pytest.mark.skip(reason="待后续PR修复")
 def test_refresh_token():
     """测试刷新token"""
     print("\n" + "=" * 60)
