@@ -167,8 +167,8 @@ class EnsembleStrategy(BaseStrategy):
             buy_score = 0
             sell_score = 0
 
-            for s in signals.values():
-                weight = self.weights.get(s.name, 0)
+            for strat_name, s in signals.items():
+                weight = self.weights.get(strat_name, 0)
                 confidence = s.confidence if s.confidence else 0.5
 
                 if s.signal_type == SignalType.BUY:

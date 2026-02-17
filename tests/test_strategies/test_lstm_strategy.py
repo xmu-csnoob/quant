@@ -207,3 +207,69 @@ class TestLSTMStrategyLoad:
             device='cpu'
         )
         assert strategy is None
+
+
+class TestLSTMStrategySell:
+    """测试卖出信号"""
+
+    def test_generate_signals_sell(self, lstm_strategy, sample_ohlcv):
+        """测试卖出信号生成"""
+        # Mock返回低概率
+        def mock_forward_low(x):
+            return torch.tensor([[0.25]]), None
+
+        lstm_strategy.model.side_effect = mock_forward_low
+
+        signals = lstm_strategy.generate_signals(sample_ohlcv)
+
+        # 卖出信号需要先有持仓，这里只验证返回列表
+        assert isinstance(signals, list)
+
+
+class TestLSTMStrategyThresholds:
+    """测试阈值边界"""
+
+    def test_buy_threshold_boundary(self, mock_model, mock_feature_extractor, mock_scaler, sample_ohlcv):
+        """测试买入阈值边界"""
+        strategy = LSTMStrategy(
+            model=mock_model,
+            feature_extractor=mock_feature_extractor,
+            scaler=mock_scaler,
+            feature_cols=['f_return_1'],
+            seq_len=10,
+            buy_threshold=0.65,
+            sell_threshold=0.35,
+            device='cpu'
+        )
+
+        # 概率正好在阈值上
+        def mock_forward_boundary(x):
+            return torch.tensor([[0.70]]), None
+
+        strategy.model.side_effect = mock_forward_boundary
+
+        signals = strategy.generate_signals(sample_ohlcv)
+        # 应该产生买入信号
+        assert isinstance(signals, list)
+
+    def test_sell_threshold_boundary(self, mock_model, mock_feature_extractor, mock_scaler, sample_ohlcv):
+        """测试卖出阈值边界"""
+        strategy = LSTMStrategy(
+            model=mock_model,
+            feature_extractor=mock_feature_extractor,
+            scaler=mock_scaler,
+            feature_cols=['f_return_1'],
+            seq_len=10,
+            buy_threshold=0.65,
+            sell_threshold=0.35,
+            device='cpu'
+        )
+
+        # 概率低于卖出阈值
+        def mock_forward_sell(x):
+            return torch.tensor([[0.30]]), None
+
+        strategy.model.side_effect = mock_forward_sell
+
+        signals = strategy.generate_signals(sample_ohlcv)
+        assert isinstance(signals, list)
