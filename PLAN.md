@@ -34,10 +34,23 @@
   - `tests/` 目录结构规范
   - CI检查测试覆盖率变化
 - **验收标准**:
-  - [ ] 核心模块有测试覆盖
-  - [ ] PR提交时检查测试是否通过
+  - [x] 核心模块有测试覆盖 (已完成: P0模块10/11达90%)
+  - [x] PR提交时检查测试是否通过
+  - [ ] 全局覆盖率 > 60%
 
-#### 2.2 分诊式Review
+#### 2.2 CI灵活化 - Bypass标签机制
+- **目标**: 为特定类型的PR提供CI检查豁免
+- **场景**:
+  - 纯测试PR (`test-only`): 可跳过"调用链/数据流图"、"不变量与边界"模板检查
+  - 文档PR (`docs-only`): 可跳过所有模板检查
+  - 大型重构 (`large-refactor`): 可跳过500行限制
+- **输出**: `.github/workflows/pr-template-check.yml` 改造
+- **验收标准**:
+  - [x] 支持 `test-only`、`docs-only`、`emergency-override` 标签
+  - [x] 带标签的PR自动跳过对应的CI检查
+  - [x] 记录跳过原因到PR comment
+
+#### 2.3 分诊式Review
 - **目标**: AI指出高风险点+复现路径，不做最终裁判
 - **输出**:
   - `.github/REVIEW_CHECKLIST.md`
