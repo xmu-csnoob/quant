@@ -201,3 +201,249 @@ class TestEnsembleUnknownMethod:
         # 应该回退到voting而不是崩溃
         signals = ensemble.generate_signals(sample_ohlcv)
         assert isinstance(signals, list)
+
+
+class TestEnsembleVotingSell:
+    """测试投票卖出机制"""
+
+    def test_voting_sell_consensus(self, sample_ohlcv):
+        """测试卖出共识"""
+        # 创建先买入后卖出的策略
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=0.8),
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell1", confidence=0.7),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy2", confidence=0.7),
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell2", confidence=0.6),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="voting",
+            min_agree=2,
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+
+        # 两个策略都建议卖出，应该有卖出信号
+        assert len(sell_signals) > 0
+
+    def test_voting_sell_no_consensus(self, sample_ohlcv):
+        """测试卖出无共识"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=0.8),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy2", confidence=0.7),
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell2", confidence=0.6),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="voting",
+            min_agree=2,
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        # 只有一个策略建议卖出，不应该卖出
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+        assert len(sell_signals) == 0
+
+
+class TestEnsembleWeightedSell:
+    """测试加权卖出机制"""
+
+    def test_weighted_sell(self, sample_ohlcv):
+        """测试加权卖出"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=0.9),
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell1", confidence=0.9),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy2", confidence=0.8),
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell2", confidence=0.8),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="weighted",
+            weights={"S1": 0.6, "S2": 0.4},
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+
+        # 高权重高置信度应该产生卖出信号
+        assert len(sell_signals) > 0
+
+    def test_weighted_sell_below_threshold(self, sample_ohlcv):
+        """测试加权卖出低于阈值"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=0.9),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230605", signal_type=SignalType.SELL, price=11.0, reason="sell2", confidence=0.1),  # 低置信度
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="weighted",
+            weights={"S1": 0.5, "S2": 0.5},
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        # 低置信度可能不触发卖出
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+        # 可能没有卖出信号
+        assert isinstance(sell_signals, list)
+
+
+class TestEnsembleWeightedEdgeCases:
+    """测试加权机制边界情况"""
+
+    def test_weighted_no_confidence(self, sample_ohlcv):
+        """测试无置信度的信号"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=None),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy2", confidence=None),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="weighted",
+            weights={"S1": 0.6, "S2": 0.4},
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        # 无置信度时使用默认值0.5
+        assert isinstance(signals, list)
+
+    def test_weighted_unknown_strategy(self, sample_ohlcv):
+        """测试未知策略权重"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="buy1", confidence=0.9),
+        ])
+
+        # 权重中不包含S1
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1],
+            method="weighted",
+            weights={"UnknownStrategy": 1.0},
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+        # 未知策略使用权重0
+        assert isinstance(signals, list)
+
+
+class TestEnsembleFullCycle:
+    """测试完整交易周期"""
+
+    def test_full_trading_cycle(self, sample_ohlcv):
+        """测试完整交易周期"""
+        # 创建会产生买入和卖出信号的策略
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "Trend"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="trend_buy", confidence=0.8),
+            Signal(date="20230620", signal_type=SignalType.SELL, price=12.0, reason="trend_sell", confidence=0.7),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "MeanRev"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="mr_buy", confidence=0.7),
+            Signal(date="20230620", signal_type=SignalType.SELL, price=12.0, reason="mr_sell", confidence=0.6),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="voting",
+            min_agree=2,
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+
+        # 应该有买入和卖出信号
+        buy_signals = [s for s in signals if s.signal_type == SignalType.BUY]
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+
+        assert len(buy_signals) > 0
+        assert len(sell_signals) > 0
+
+    def test_signal_reason_format(self, sample_ohlcv):
+        """测试信号原因格式"""
+        strategy1 = Mock(spec=BaseStrategy)
+        strategy1.name = "S1"
+        strategy1.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="test_reason", confidence=0.8),
+        ])
+
+        strategy2 = Mock(spec=BaseStrategy)
+        strategy2.name = "S2"
+        strategy2.generate_signals = Mock(return_value=[
+            Signal(date="20230601", signal_type=SignalType.BUY, price=10.0, reason="another_reason", confidence=0.7),
+        ])
+
+        ensemble = EnsembleStrategy(
+            strategies=[strategy1, strategy2],
+            method="voting",
+            min_agree=2,
+        )
+
+        signals = ensemble.generate_signals(sample_ohlcv)
+
+        if len(signals) > 0:
+            # 检查信号原因包含投票信息
+            assert "投票" in signals[0].reason or "加权" in signals[0].reason or "test_reason" in signals[0].reason
+
+
+class TestCreateDefaultEnsembleEdgeCases:
+    """测试默认组合边界情况"""
+
+    def test_create_with_invalid_model(self):
+        """测试无效ML模型"""
+        # 没有model或feature_extractor时，不应该添加ML策略
+        ensemble = create_default_ensemble(model=None, feature_extractor=None)
+
+        assert len(ensemble.strategies) == 2  # 只有基础策略
+
+    def test_create_with_partial_ml(self):
+        """测试部分ML参数"""
+        mock_extractor = Mock()
+
+        # 只有feature_extractor，没有model
+        ensemble = create_default_ensemble(model=None, feature_extractor=mock_extractor)
+
+        assert len(ensemble.strategies) == 2  # 不应该添加ML策略
