@@ -1,65 +1,86 @@
 # 覆盖率阈值配置
 #
 # 定义不同模块的最低覆盖率要求
+# 分类标准：
+#   - P0 核心模块：直接影响交易决策和资金安全
+#   - P1 重要模块：影响交易执行和策略验证
+#   - P2 辅助模块：工具函数和数据处理
+#   - 排除模块：依赖外部系统，不做强制要求
 
-# 全局覆盖率阈值
+# 全局覆盖率阈值（辅助模块基准）
 global:
-  minimum: 40
-  target: 60
-  description: "全局代码覆盖率，当前40%，目标60%"
+  minimum: 60
+  target: 80
+  description: "全局代码覆盖率基准"
 
-# 按模块定义覆盖率阈值
-modules:
-  # 策略模块 - 核心交易逻辑
-  strategies:
-    minimum: 60
-    target: 75
-    priority: high
-    description: "交易策略实现，包括信号生成和策略组合"
+# P0 核心模块 - 目标 90%
+p0_critical:
+  minimum: 90
+  target: 95
+  priority: critical
+  description: "核心模块：直接影响交易决策和资金安全"
+  modules:
+    # 策略逻辑
+    - "src/strategies/*.py"
+    # 风控逻辑
+    - "src/risk/*.py"
+    # 订单管理
+    - "src/trading/orders.py"
+    # T+1规则
+    - "src/trading/t1_manager.py"
 
-  # 风险管理模块 - 关键安全逻辑
-  risk:
-    minimum: 70
-    target: 85
-    priority: critical
-    description: "风险管理和仓位控制，需要更高的测试覆盖率"
+# P1 重要模块 - 目标 80%
+p1_important:
+  minimum: 80
+  target: 90
+  priority: high
+  description: "重要模块：影响交易执行和策略验证"
+  modules:
+    # 交易成本
+    - "src/backtesting/costs.py"
+    # 回测引擎
+    - "src/backtesting/simple_backtester.py"
+    # 交易API
+    - "src/trading/api.py"
+    # 涨跌停规则
+    - "src/trading/price_limit.py"
 
-  # 交易执行模块
-  trading:
-    minimum: 60
-    target: 75
-    priority: high
-    description: "交易执行和订单管理"
+# P2 辅助模块 - 目标 60%
+p2_support:
+  minimum: 60
+  target: 75
+  priority: medium
+  description: "辅助模块：工具函数和数据处理"
+  modules:
+    - "src/utils/**/*.py"
+    - "src/backtesting/slippage.py"
+    - "src/data/api/*.py"
+    - "src/data/storage/*.py"
+    - "src/data/cache/*.py"
 
-  # 数据层
-  data:
-    minimum: 50
-    target: 65
-    priority: medium
-    description: "数据获取、存储和管理"
-
-  # 回测引擎
-  backtesting:
-    minimum: 55
-    target: 70
-    priority: medium
-    description: "回测引擎和性能评估"
-
-  # 工具模块
-  utils:
-    minimum: 50
-    target: 65
-    priority: low
-    description: "工具函数和辅助模块"
+# 排除模块 - 不做覆盖率要求
+excluded:
+  description: "排除模块：依赖外部系统或非核心功能"
+  modules:
+    # 模型加载（依赖外部文件）
+    - "src/models/**"
+    # 数据获取（依赖外部API）
+    - "src/data/fetchers/**"
+    # Web服务（用集成测试覆盖）
+    - "src/api/**"
+    # 数据库（依赖外部数据库）
+    - "src/data/database/**"
+    # 数据处理（依赖外部资源）
+    - "src/data/processors/**"
 
 # 新增代码覆盖率要求
 new_code:
-  minimum: 70
-  description: "PR中新增代码的最低覆盖率要求"
+  minimum: 80
+  description: "PR中新增代码的最低覆盖率要求（P0/P1模块）"
 
 # 覆盖率下降容忍度
 tolerance:
-  max_drop: 5
+  max_drop: 3
   description: "相比base分支，覆盖率下降的最大容忍百分比"
 
 # 特殊规则

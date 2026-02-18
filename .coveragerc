@@ -4,6 +4,12 @@ source = src
 branch = True
 data_file = .coverage
 
+# 排除不需要统计的模块
+omit =
+    src/models/*
+    src/data/fetchers/*
+    src/api/services/*
+
 [report]
 # 覆盖率报告配置
 precision = 2
@@ -20,8 +26,8 @@ exclude_lines =
     if TYPE_CHECKING:
     @abstractmethod
 
-# 失败阈值
-fail_under = 40
+# 全局最低阈值（辅助模块）
+fail_under = 60
 
 [html]
 # HTML报告配置
