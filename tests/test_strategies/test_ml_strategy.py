@@ -379,3 +379,170 @@ class TestMLStrategyAutoFeatures:
 
         signals = strategy.generate_signals(df)
         assert isinstance(signals, list)
+
+
+class TestMLStrategyModelIOWithRealModel:
+    """使用真实模型测试保存和加载"""
+
+    def test_save_and_load_model(self, tmp_path):
+        """测试模型保存和加载"""
+        from sklearn.linear_model import LinearRegression
+
+        # 创建简单的特征提取器
+        mock_extractor = Mock()
+        def mock_extract(df):
+            result = df.copy()
+            result['f_return_1'] = result['close'].pct_change()
+            result['f_return_5'] = result['close'].pct_change(5)
+            return result
+        mock_extractor.extract = mock_extract
+
+        # 创建真实的模型，特征数与提取器匹配
+        model = LinearRegression()
+        X = np.random.randn(100, 2)  # 2个特征
+        y = np.random.randn(100)
+        model.fit(X, y)
+
+        # 创建策略
+        strategy = MLStrategy(
+            model=model,
+            feature_extractor=mock_extractor,
+            threshold=0.02,
+            feature_cols=['f_return_1', 'f_return_5']
+        )
+
+        # 保存模型
+        model_path = str(tmp_path / "ml_model.pkl")
+        strategy.save_model(model_path)
+
+        # 验证文件存在
+        assert Path(model_path).exists()
+
+        # 加载模型
+        loaded_strategy = MLStrategy.load_model(
+            model_path,
+            feature_extractor=mock_extractor,
+            threshold=0.02,
+            feature_cols=['f_return_1', 'f_return_5']
+        )
+
+        # 验证加载成功
+        assert loaded_strategy is not None
+        assert loaded_strategy.threshold == 0.02
+
+        # 创建简单的测试数据
+        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        np.random.seed(42)
+        prices = 10.0 * (1 + np.random.randn(100) * 0.02).cumprod()
+        df = pd.DataFrame({
+            'trade_date': dates,
+            'close': prices,
+            'volume': np.random.randint(1000000, 10000000, 100),
+        })
+
+        # 验证可以生成信号
+        signals = loaded_strategy.generate_signals(df)
+        assert isinstance(signals, list)
+
+
+class TestMLStrategySignalReasons:
+    """测试信号原因"""
+
+    def test_buy_signal_reason(self, ml_strategy, sample_ohlcv):
+        """测试买入信号原因"""
+        def mock_predict_high(X):
+            n_samples = X.shape[0] if hasattr(X, 'shape') else len(X)
+            return np.full(n_samples, 0.05)
+
+        ml_strategy.model.predict = mock_predict_high
+
+        signals = ml_strategy.generate_signals(sample_ohlcv)
+        buy_signals = [s for s in signals if s.signal_type == SignalType.BUY]
+
+        if len(buy_signals) > 0:
+            assert "预测收益率" in buy_signals[0].reason
+            assert "阈值" in buy_signals[0].reason
+
+    def test_sell_signal_reason(self, ml_strategy, sample_ohlcv):
+        """测试卖出信号原因"""
+        call_count = [0]
+
+        def mock_predict_sell(X):
+            n_samples = X.shape[0] if hasattr(X, 'shape') else len(X)
+            results = []
+            for i in range(n_samples):
+                call_count[0] += 1
+                if call_count[0] < 10:
+                    results.append(0.05)
+                else:
+                    results.append(-0.03)
+            return np.array(results)
+
+        ml_strategy.model.predict = mock_predict_sell
+
+        signals = ml_strategy.generate_signals(sample_ohlcv)
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+
+        if len(sell_signals) > 0:
+            assert "预测收益率" in sell_signals[0].reason
+
+
+class TestMLStrategyFullCycle:
+    """测试完整交易周期"""
+
+    def test_buy_sell_cycle(self, ml_strategy, sample_ohlcv):
+        """测试完整的买卖周期"""
+        call_count = [0]
+
+        def mock_predict_cycle(X):
+            n_samples = X.shape[0] if hasattr(X, 'shape') else len(X)
+            results = []
+            for i in range(n_samples):
+                call_count[0] += 1
+                # 先高后低
+                if call_count[0] < 30:
+                    results.append(0.05)  # 买入
+                else:
+                    results.append(-0.02)  # 卖出
+            return np.array(results)
+
+        ml_strategy.model.predict = mock_predict_cycle
+
+        signals = ml_strategy.generate_signals(sample_ohlcv)
+
+        buy_signals = [s for s in signals if s.signal_type == SignalType.BUY]
+        sell_signals = [s for s in signals if s.signal_type == SignalType.SELL]
+
+        # 应该有买入和卖出
+        assert len(buy_signals) > 0
+        assert len(sell_signals) > 0
+
+    def test_signal_alternation(self, ml_strategy, sample_ohlcv):
+        """测试买卖信号交替"""
+        call_count = [0]
+
+        def mock_predict_alternating(X):
+            n_samples = X.shape[0] if hasattr(X, 'shape') else len(X)
+            results = []
+            for i in range(n_samples):
+                call_count[0] += 1
+                # 交替高低
+                if (call_count[0] // 20) % 2 == 0:
+                    results.append(0.05)
+                else:
+                    results.append(-0.02)
+            return np.array(results)
+
+        ml_strategy.model.predict = mock_predict_alternating
+
+        signals = ml_strategy.generate_signals(sample_ohlcv)
+
+        # 检查信号交替
+        prev_type = None
+        for sig in signals:
+            if prev_type is not None:
+                if prev_type == SignalType.BUY:
+                    assert sig.signal_type == SignalType.SELL
+                else:
+                    assert sig.signal_type == SignalType.BUY
+            prev_type = sig.signal_type
