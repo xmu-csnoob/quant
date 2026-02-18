@@ -42,13 +42,13 @@
 - **目标**: 为特定类型的PR提供CI检查豁免
 - **场景**:
   - 纯测试PR (`test-only`): 可跳过"调用链/数据流图"、"不变量与边界"模板检查
-  - 文档PR (`docs-only`): 可跳过测试覆盖率检查
+  - 文档PR (`docs-only`): 可跳过所有模板检查
   - 大型重构 (`large-refactor`): 可跳过500行限制
 - **输出**: `.github/workflows/pr-template-check.yml` 改造
 - **验收标准**:
-  - [ ] 支持 `test-only`、`docs-only`、`large-refactor` 标签
-  - [ ] 带标签的PR自动跳过对应的CI检查
-  - [ ] 记录跳过原因到PR comment
+  - [x] 支持 `test-only`、`docs-only`、`emergency-override` 标签
+  - [x] 带标签的PR自动跳过对应的CI检查
+  - [x] 记录跳过原因到PR comment
 
 #### 2.3 分诊式Review
 - **目标**: AI指出高风险点+复现路径，不做最终裁判

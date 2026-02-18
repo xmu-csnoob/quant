@@ -18,15 +18,26 @@ jobs:
       - name: Check required sections
         id: template-check
         run: |
-          # 获取PR body
+          # 获取PR body和labels
           BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body --jq '.body')
-
-          # 检查是否有豁免label
           LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
 
+          # 检查豁免labels
+          SKIP_SECTIONS=""
+
           if echo "$LABELS" | grep -q "emergency-override"; then
-            echo "⚠️ 检测到 emergency-override label，跳过模板检查"
+            echo "⚠️ 检测到 emergency-override label，跳过所有模板检查"
             exit 0
+          fi
+
+          if echo "$LABELS" | grep -q "docs-only"; then
+            echo "📝 检测到 docs-only label，跳过模板检查（文档PR）"
+            exit 0
+          fi
+
+          if echo "$LABELS" | grep -q "test-only"; then
+            echo "🧪 检测到 test-only label，跳过部分模板检查（纯测试PR）"
+            SKIP_SECTIONS="flowchart|invariants"
           fi
 
           ERRORS=""
@@ -45,30 +56,38 @@ jobs:
             ERRORS="$ERRORS\n- ❌ 设计摘要: 缺少此section"
           fi
 
-          # 检查调用链/数据流图
-          if echo "$BODY" | grep -q "## 调用链/数据流图"; then
-            SECTION=$(echo "$BODY" | sed -n '/## 调用链\/数据流图/,/^## /p' | head -n -1 | tail -n +2)
-            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
-            if [ -z "$CONTENT" ]; then
-              ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 未填写"
-            else
-              echo "✅ 调用链/数据流图: 已填写"
-            fi
+          # 检查调用链/数据流图（test-only可跳过）
+          if echo "$SKIP_SECTIONS" | grep -q "flowchart"; then
+            echo "⏭️ 调用链/数据流图: 已跳过（test-only）"
           else
-            ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 缺少此section"
+            if echo "$BODY" | grep -q "## 调用链/数据流图"; then
+              SECTION=$(echo "$BODY" | sed -n '/## 调用链\/数据流图/,/^## /p' | head -n -1 | tail -n +2)
+              CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
+              if [ -z "$CONTENT" ]; then
+                ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 未填写"
+              else
+                echo "✅ 调用链/数据流图: 已填写"
+              fi
+            else
+              ERRORS="$ERRORS\n- ❌ 调用链/数据流图: 缺少此section"
+            fi
           fi
 
-          # 检查不变量与边界
-          if echo "$BODY" | grep -q "## 不变量与边界"; then
-            SECTION=$(echo "$BODY" | sed -n '/## 不变量与边界/,/^## /p' | head -n -1 | tail -n +2)
-            CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
-            if [ -z "$CONTENT" ]; then
-              ERRORS="$ERRORS\n- ❌ 不变量与边界: 未填写"
-            else
-              echo "✅ 不变量与边界: 已填写"
-            fi
+          # 检查不变量与边界（test-only可跳过）
+          if echo "$SKIP_SECTIONS" | grep -q "invariants"; then
+            echo "⏭️ 不变量与边界: 已跳过（test-only）"
           else
-            ERRORS="$ERRORS\n- ❌ 不变量与边界: 缺少此section"
+            if echo "$BODY" | grep -q "## 不变量与边界"; then
+              SECTION=$(echo "$BODY" | sed -n '/## 不变量与边界/,/^## /p' | head -n -1 | tail -n +2)
+              CONTENT=$(echo "$SECTION" | sed 's/<!--[^>]*-->//g' | grep -v '^[[:space:]]*$' | tr -d '\n')
+              if [ -z "$CONTENT" ]; then
+                ERRORS="$ERRORS\n- ❌ 不变量与边界: 未填写"
+              else
+                echo "✅ 不变量与边界: 已填写"
+              fi
+            else
+              ERRORS="$ERRORS\n- ❌ 不变量与边界: 缺少此section"
+            fi
           fi
 
           # 检查复现脚本
@@ -120,6 +139,12 @@ jobs:
           - 帮助reviewer快速理解变更意图
           - 确保关键决策被记录
           - 便于后续维护和问题定位
+
+          ### Bypass标签
+          如果是特定类型的PR，可以添加以下标签跳过部分检查：
+          - \`test-only\`: 纯测试PR，跳过"调用链/数据流图"和"不变量与边界"
+          - \`docs-only\`: 文档PR，跳过所有模板检查
+          - \`emergency-override\`: 紧急修复，跳过所有检查
 
           请完善PR描述后重新提交。
           "
