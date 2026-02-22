@@ -273,8 +273,10 @@ class TestT1Manager:
         print("\n测试部分T+1锁定")
         manager = T1Manager()
 
-        today = date.today()
-        yesterday = date(today.year, today.month, today.day - 1)
+        # 使用固定日期避免周末问题
+        # 周三买入，周四可卖
+        today = date(2026, 2, 19)  # 周四
+        yesterday = date(2026, 2, 18)  # 周三
         code = "600000.SH"
 
         # 昨天买入500股
@@ -282,7 +284,7 @@ class TestT1Manager:
         # 今天买入500股
         manager.record_buy(code, 500, today, 10.0)
 
-        # 今天可卖500股
+        # 今天可卖500股（昨天买入的）
         available = manager.get_available_shares(code, today)
         assert available == 500
         print(f"  ✅ 今天可卖: {available}股，T+1锁定: 500股")
