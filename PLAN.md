@@ -54,10 +54,10 @@
 - **目标**: AI指出高风险点+复现路径，不做最终裁判
 - **输出**:
   - `.github/REVIEW_CHECKLIST.md`
-  - 可能的AI review脚本/配置
+  - `scripts/ai_review.py` 自动化检查脚本
 - **验收标准**:
-  - [ ] Review checklist覆盖核心风险点
-  - [ ] 高风险点必须有复现路径
+  - [x] Review checklist覆盖核心风险点
+  - [x] 高风险点必须有复现路径
 
 ### Phase 3: 中期做（1个月内完成）
 
