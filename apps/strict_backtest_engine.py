@@ -110,63 +110,77 @@ class StrictBacktestEngine:
         """
         # 按调仓周期分组
         all_dates = sorted(predictions_df['trade_date'].unique())
-        rebalance_dates = all_dates[::self.holding_period]
+        rebalance_dates = set(all_dates[::self.holding_period])
 
         cash_per_slot = self.initial_capital / self.max_positions
         trade_results = []
-        portfolio_values = [self.initial_capital]
+        portfolio_values = []
         current_positions: Dict[str, StrictTradeResult] = {}
 
-        for signal_date in rebalance_dates:
-            # 获取当日预测
-            day_preds = predictions_df[
-                predictions_df['trade_date'] == signal_date
-            ].sort_values('pred_prob', ascending=False)
+        # 关键修复：跟踪现金余额
+        cash = self.initial_capital
 
-            if len(day_preds) == 0:
-                continue
+        # 遍历所有交易日（不仅仅是调仓日）
+        for current_date in all_dates:
+            # 检查是否是调仓日
+            if current_date in rebalance_dates:
+                # 获取当日预测
+                day_preds = predictions_df[
+                    predictions_df['trade_date'] == current_date
+                ].sort_values('pred_prob', ascending=False)
 
-            # 选择 Top N
-            top_stocks = day_preds.head(self.max_positions)
+                if len(day_preds) > 0:
+                    # 选择 Top N
+                    top_stocks = set(day_preds.head(self.max_positions)['ts_code'].values)
 
-            # 执行卖出（先卖后买）
-            sell_proceeds = 0.0
-            positions_to_sell = [
-                code for code in current_positions
-                if code not in top_stocks['ts_code'].values
-            ]
+                    # 执行卖出（先卖后买）
+                    positions_to_sell = [
+                        code for code in current_positions
+                        if code not in top_stocks
+                    ]
 
-            for ts_code in positions_to_sell:
-                result = current_positions[ts_code]
-                if result.status == 'executed' and result.sell_date:
-                    sell_proceeds += result.net_proceeds
-                del current_positions[ts_code]
+                    for ts_code in positions_to_sell:
+                        result = current_positions[ts_code]
+                        if result.status == 'executed' and result.sell_date:
+                            # 卖出所得净收入归入现金
+                            cash += result.net_proceeds
+                        del current_positions[ts_code]
 
-            # 执行买入
-            buy_cost = 0.0
-            for _, row in top_stocks.iterrows():
-                ts_code = row['ts_code']
-                if ts_code in current_positions:
-                    continue  # 已持有
+                    # 执行买入
+                    for _, row in day_preds.head(self.max_positions).iterrows():
+                        ts_code = row['ts_code']
+                        if ts_code in current_positions:
+                            continue  # 已持有
 
-                result = self._execute_trade(
-                    ts_code=ts_code,
-                    signal_date=signal_date,
-                    pred_prob=row['pred_prob'],
-                    cash_slot=cash_per_slot,
-                )
-                trade_results.append(result)
+                        result = self._execute_trade(
+                            ts_code=ts_code,
+                            signal_date=current_date,
+                            pred_prob=row['pred_prob'],
+                            cash_slot=cash_per_slot,
+                        )
+                        trade_results.append(result)
 
+                        if result.status == 'executed':
+                            current_positions[ts_code] = result
+                            # 买入成本从现金中扣除
+                            cash -= result.buy_cost
+
+            # 每个交易日都计算组合价值
+            # 组合价值 = 持仓市值 + 现金
+            position_value = 0.0
+            for ts_code, result in current_positions.items():
                 if result.status == 'executed':
-                    current_positions[ts_code] = result
-                    buy_cost += result.buy_cost * result.shares
+                    # 获取当前日的收盘价
+                    stock_prices = self._get_stock_prices(ts_code)
+                    current_prices = stock_prices[stock_prices['trade_date'] == current_date]
+                    if not current_prices.empty:
+                        current_price = current_prices.iloc[0]['close']
+                        position_value += result.shares * current_price
+                    else:
+                        # 如果找不到当日价格，用买入价作为 fallback
+                        position_value += result.shares * result.buy_price
 
-            # 计算当日组合价值
-            position_value = sum(
-                r.net_proceeds for r in current_positions.values()
-                if r.status == 'executed'
-            )
-            total_value = position_value + sell_proceeds
+            total_value = position_value + cash
             portfolio_values.append(total_value)
 
         # 汇总结果
@@ -344,7 +358,9 @@ class StrictBacktestEngine:
         buy_cost = buy_price * shares * (1 + buy_rate)
         sell_revenue = sell_price * shares * (1 - sell_rate)
         net_proceeds = sell_revenue
-        trade_return = (net_proceeds - cash_slot) / cash_slot if cash_slot > 0 else 0
+        # 关键修复：收益 = (卖出净收入 - 买入成本) / 买入成本
+        # 而非 (卖出净收入 - 分配资金) / 分配资金
+        trade_return = (net_proceeds - buy_cost) / buy_cost if buy_cost > 0 else 0
 
         return StrictTradeResult(
             ts_code=ts_code,
