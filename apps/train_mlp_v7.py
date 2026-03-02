@@ -351,7 +351,8 @@ class Neutralizer:
     def fit(self, df: pd.DataFrame, feature_cols: list):
         """拟合中性化模型 - 记录所有行业类别"""
         if 'industry' in df.columns:
-            all_industries = df['industry'].unique()
+            # 过滤掉 NaN 值
+            all_industries = df['industry'].dropna().unique()
             self.industry_cols = [f'ind_{ind}' for ind in sorted(all_industries)]
             self.fitted_industries = set(all_industries)
             logger.info(f"中性化: {len(self.industry_cols)} 个行业哑变量")
