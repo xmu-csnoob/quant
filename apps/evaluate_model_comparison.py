@@ -45,7 +45,7 @@ class EvaluationConfig:
     top_decile: float = 0.1  # Top 10%
     bottom_decile: float = 0.1  # Bottom 10%
 
-    # 交易成本（A股）
+    # 交易成本（A股）- 简化版使用
     commission_buy: float = 0.0003  # 买入佣金 0.03%
     commission_sell: float = 0.0013  # 卖出佣金+印花税 0.13%
     slippage: float = 0.001  # 滑点 0.1%
@@ -60,6 +60,11 @@ class EvaluationConfig:
     suspend_threshold: int = 3  # 停牌阈值
     min_volume_ratio: float = 0.05  # 最小成交量比率
 
+    # === 严格回测引擎 ===
+    use_strict_engine: bool = True  # 使用严格回测引擎（订单级执行）
+    initial_capital: float = 1_000_000.0  # 初始资金
+    max_volume_participation: float = 0.10  # 最大成交量参与度
+
     def __post_init__(self):
         if self.train_years is None:
             self.train_years = [2021, 2022]
@@ -73,6 +78,22 @@ class ModelEvaluator:
     def __init__(self, config: EvaluationConfig):
         self.config = config
         self.storage = SQLiteStorage()
+
+        # 初始化严格回测引擎（如果启用）
+        self.strict_engine = None
+        if config.use_strict_engine:
+            try:
+                from apps.strict_backtest_engine import StrictBacktestEngine
+                self.strict_engine = StrictBacktestEngine(
+                    holding_period=config.holding_period,
+                    max_positions=config.max_positions,
+                    initial_capital=config.initial_capital,
+                    max_volume_participation=config.max_volume_participation,
+                )
+                logger.info("严格回测引擎已启用")
+            except ImportError as e:
+                logger.warning(f"无法导入严格回测引擎，使用简化版本: {e}")
+                self.strict_engine = None
 
     def load_predictions(
         self,
@@ -234,7 +255,11 @@ class ModelEvaluator:
         ret_col: str = 'fwd_ret'
     ) -> Dict[str, float]:
         """
-        计算组合级指标（严格回测版本）
+        计算组合级指标
+
+        根据配置选择严格回测引擎或简化版本：
+        - 严格引擎：订单级执行，真实滑点/成本，涨跌停/停牌精确处理
+        - 简化版本：快速评估，约束为近似实现
 
         关键修复：fwd_ret 是 N 天收益率，必须每 N 天调仓一次，不能每日调仓！
         否则会导致收益被错误叠加，MDD虚高。
@@ -246,6 +271,150 @@ class ModelEvaluator:
 
         Returns:
             完整的组合指标字典
+        """
+        # 优先使用严格回测引擎
+        if self.strict_engine is not None:
+            return self._compute_portfolio_metrics_strict(df, pred_col, ret_col)
+
+        # 否则使用简化版本
+        return self._compute_portfolio_metrics_simple(df, pred_col, ret_col)
+
+    def _compute_portfolio_metrics_strict(
+        self,
+        df: pd.DataFrame,
+        pred_col: str = 'pred_prob',
+        ret_col: str = 'fwd_ret'
+    ) -> Dict[str, float]:
+        """
+        严格回测引擎版本
+
+        使用 StrictBacktestEngine 进行订单级回测：
+        - 真实的 T+1 约束
+        - 区分板块的涨跌停阈值
+        - 时间感知滑点模型
+        - 精确交易成本计算
+        - 停牌/跌停延迟卖出
+        """
+        logger.info("使用严格回测引擎...")
+
+        # 准备预测数据格式
+        predictions_df = df[['ts_code', 'trade_date', pred_col, ret_col]].copy()
+        predictions_df = predictions_df.rename(columns={
+            pred_col: 'pred_prob',
+            ret_col: 'fwd_ret'
+        })
+
+        # 运行严格回测
+        trade_results, engine_metrics = self.strict_engine.run_backtest(predictions_df)
+
+        if trade_results.empty:
+            logger.warning("严格回测无有效交易")
+            return self._empty_metrics()
+
+        # 统计交易结果
+        executed_trades = trade_results[trade_results['status'] == 'executed']
+        n_executed = len(executed_trades)
+        n_skipped = len(trade_results[trade_results['status'] == 'skipped'])
+
+        logger.info(f"严格回测完成: {n_executed} 笔执行, {n_skipped} 笔跳过")
+
+        if n_executed == 0:
+            return self._empty_metrics()
+
+        # 计算组合级指标
+        # 1. 年化收益
+        annual_return = engine_metrics.get('annual_return', 0)
+
+        # 2. 最大回撤
+        max_drawdown = engine_metrics.get('max_drawdown', 0)
+
+        # 3. 夏普比率
+        sharpe_ratio = engine_metrics.get('sharpe_ratio', 0)
+
+        # 4. Calmar比率
+        calmar_ratio = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0
+
+        # 5. 换手率（从交易结果估算）
+        signal_dates = executed_trades['signal_date'].nunique()
+        avg_positions_per_period = n_executed / signal_dates if signal_dates > 0 else 0
+        turnover = avg_positions_per_period / self.config.max_positions
+        periods_per_year = 252 / self.config.holding_period
+        annual_turnover = turnover * periods_per_year
+
+        # 6. 成本分析（从交易结果汇总）
+        if 'buy_cost' in executed_trades.columns and 'sell_cost' in executed_trades.columns:
+            total_buy_cost = executed_trades['buy_cost'].sum()
+            total_sell_cost = executed_trades['sell_cost'].sum()
+            total_trade_value = total_buy_cost + total_sell_cost
+
+            # 估算佣金和滑点占比（基于配置的费率）
+            commission_ratio = (self.config.commission_buy + self.config.commission_sell) / (
+                self.config.commission_buy + self.config.commission_sell + self.config.slippage * 2 + 1e-10
+            )
+            slippage_ratio = 1 - commission_ratio
+        else:
+            commission_ratio = 0.5
+            slippage_ratio = 0.5
+
+        # 7. 基准收益（从原始数据计算行业中性基准）
+        # 获取所有调仓日期
+        all_dates = sorted(df['trade_date'].unique())
+        rebalance_dates = all_dates[::self.config.holding_period]
+
+        baseline_returns = []
+        for date in rebalance_dates:
+            day_df = df[df['trade_date'] == date]
+            if 'industry' in day_df.columns and len(day_df) > 0:
+                industry_returns = day_df.groupby('industry')[ret_col].mean()
+                n_industries = len(industry_returns)
+                if n_industries > 0:
+                    baseline_ret = industry_returns.sum() / n_industries
+                    baseline_returns.append(baseline_ret)
+
+        if baseline_returns:
+            avg_baseline = np.mean(baseline_returns)
+            baseline_annual = (1 + avg_baseline) ** periods_per_year - 1
+        else:
+            baseline_annual = 0
+
+        # 8. 超额收益
+        annual_excess = annual_return - baseline_annual
+
+        # 9. 信息比率（简化计算）
+        information_ratio = annual_excess / (abs(max_drawdown) + 1e-10)
+
+        # 10. 平均净收益率
+        if 'trade_return' in executed_trades.columns:
+            avg_net_return = executed_trades['trade_return'].mean()
+        else:
+            avg_net_return = annual_return / periods_per_year
+
+        return {
+            'annual_return': annual_return,
+            'max_drawdown': max_drawdown,
+            'sharpe_ratio': sharpe_ratio,
+            'calmar_ratio': calmar_ratio,
+            'turnover': turnover,
+            'annual_turnover': annual_turnover,
+            'commission_ratio': commission_ratio,
+            'slippage_ratio': slippage_ratio,
+            'net_return': avg_net_return,
+            'baseline_annual': baseline_annual,
+            'annual_excess': annual_excess,
+            'information_ratio': information_ratio,
+            'n_rebalances': signal_dates,
+        }
+
+    def _compute_portfolio_metrics_simple(
+        self,
+        df: pd.DataFrame,
+        pred_col: str = 'pred_prob',
+        ret_col: str = 'fwd_ret'
+    ) -> Dict[str, float]:
+        """
+        简化回测版本（原有逻辑）
+
+        用于快速评估，约束为近似实现。
         """
         # 获取所有交易日并按调仓周期采样
         all_dates = sorted(df['trade_date'].unique())
@@ -355,16 +524,14 @@ class ModelEvaluator:
             # 计算组合的 period 收益（已经是 holding_period 天的收益）
             period_ret = group[group['ts_code'].isin(actual_holdings)][ret_col].mean()
 
-            # === 行业中性基准（修复P2-6）===
-            # 计算行业中性化基准收益：先按行业聚合，再按行业权重加权
+            # === 行业中性基准 ===
+            # 真正的行业中性：每个行业等权配置（1/N行业），而非按股票数量加权
             if 'industry' in group.columns:
-                # 按行业聚合计算各行业平均收益
+                # 按行业聚合计算各行业等权收益
                 industry_returns = group.groupby('industry')[ret_col].mean()
-                # 计算各行业股票数量权重
-                industry_counts = group.groupby('industry').size()
-                industry_weights = industry_counts / industry_counts.sum()
-                # 加权平均得到行业中性基准
-                baseline_ret = (industry_returns * industry_weights).sum()
+                # 行业中性 = 各行业等权配置（1/N行业）
+                n_industries = len(industry_returns)
+                baseline_ret = industry_returns.sum() / n_industries
             else:
                 # 兜底基准（如果无行业信息）
                 baseline_ret = group[ret_col].mean()
