@@ -422,6 +422,62 @@ class SQLiteStorage:
 
         logger.info(f"Exported data to {output_dir}")
 
+    def fetch_daily_price(
+        self,
+        ts_code: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        获取日线数据（支持全市场查询）
+
+        Args:
+            ts_code: 股票代码（None表示查询所有股票）
+            start_date: 开始日期 (YYYYMMDD)
+            end_date: 结束日期 (YYYYMMDD)
+
+        Returns:
+            DataFrame with columns: ts_code, trade_date, open, high, low, close, pct_chg, vol, amount, etc.
+        """
+        query = "SELECT * FROM daily_prices WHERE 1=1"
+        params = []
+
+        if ts_code:
+            query += " AND ts_code = ?"
+            params.append(ts_code)
+
+        if start_date:
+            query += " AND trade_date >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND trade_date <= ?"
+            params.append(end_date)
+
+        query += " ORDER BY trade_date, ts_code"
+
+        df = pd.read_sql_query(query, self.conn, params=params)
+        return df
+
+    def get_industry_classification(self, ts_code: Optional[str] = None) -> pd.DataFrame:
+        """
+        获取行业分类数据
+
+        Args:
+            ts_code: 股票代码（None表示查询所有股票）
+
+        Returns:
+            DataFrame with columns: ts_code, name, industry, etc.
+        """
+        if ts_code:
+            query = "SELECT ts_code, name, industry FROM stock_list WHERE ts_code = ?"
+            df = pd.read_sql_query(query, self.conn, params=[ts_code])
+        else:
+            query = "SELECT ts_code, name, industry FROM stock_list WHERE industry IS NOT NULL"
+            df = pd.read_sql_query(query, self.conn)
+
+        return df
+
     def close(self):
         """关闭数据库连接"""
         self.conn.close()

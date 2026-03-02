@@ -14,6 +14,16 @@ from typing import Optional, Tuple
 from loguru import logger
 
 
+def get_best_device() -> str:
+    """自动选择最佳设备（MPS > CUDA > CPU）"""
+    if torch.backends.mps.is_available():
+        return "mps"
+    elif torch.cuda.is_available():
+        return "cuda"
+    else:
+        return "cpu"
+
+
 class StockLSTMClassifier(nn.Module):
     """
     LSTM股票涨跌分类器

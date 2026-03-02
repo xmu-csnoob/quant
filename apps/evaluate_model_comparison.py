@@ -664,9 +664,9 @@ def generate_predictions_mlp(year: int, version: str = 'v6'):
 
     # ===== 关键修复：对全样本池预测，不使用label过滤 =====
     # 前视偏差修复：不能用 label != -1 过滤，因为label是基于未来收益生成的
-    # 正确做法：对有完整特征的所有股票预测，回测时用实际收益评估
-    valid_mask = df[feature_cols].notna().all(axis=1)  # 只检查特征完整性
-    logger.info(f"预测样本数: {valid_mask.sum()} / {len(df)} (特征完整)")
+    # 正确做法：与训练一致，fillna(0)后预测所有有fwd_ret的样本
+    valid_mask = df['fwd_ret'].notna()  # 只需要有未来收益用于评估
+    logger.info(f"预测样本数: {valid_mask.sum()} / {len(df)} (有fwd_ret)")
 
     X = df.loc[valid_mask, feature_cols].fillna(0)
 
